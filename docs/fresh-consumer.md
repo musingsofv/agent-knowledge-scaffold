@@ -35,7 +35,7 @@ installed [adoption and upgrade procedure](../packages/knowledge-agent-pack/.apm
 
 ## Prerequisites
 
-Install CPython 3.11.x and `uv`; the installation/compilation stage also needs
+Install CPython 3.11 or newer and `uv`; the installation/compilation stage also needs
 APM. Runtime-only preparation and binding do not need an APM executable. The
 setup skill targets all
 three supported harnesses by default and reports any provider that is absent
@@ -52,16 +52,16 @@ copilot --version     # report if unavailable
 ## Install the runtime
 
 For a published Python distribution, the normal path is to invoke
-`knowledge-setup`; it requires an installed CPython 3.11.x, creates
-`<scaffold>/.agent-knowledge-venv` and installs the runtime for you. If Python
-3.11 is unavailable, setup reports the remediation (for example,
+`knowledge-setup`; it requires an installed CPython 3.11 or newer, creates
+`<scaffold>/.agent-knowledge-venv` and installs the runtime for you. If no Python
+3.11+ interpreter is installed, setup reports the remediation (for example,
 `uv python install 3.11`) and stops. The commands below remain useful for a
 direct smoke or a deliberate manual override. Install the released
 `agent-knowledge-scaffold` package into a dedicated environment. During local
 development, install the checkout or a wheel built from it:
 
 ```bash
-uv venv --python 3.11 --no-managed-python .agent-knowledge-venv
+uv venv --python 'cpython>=3.11' --no-python-downloads .agent-knowledge-venv
 uv pip install --python .agent-knowledge-venv/bin/python \
   /path/to/agent-knowledge-scaffold
 export PATH="$PWD/.agent-knowledge-venv/bin:$PATH"
@@ -103,7 +103,7 @@ reflection. Copilot has no model-visible event after in-session compaction. Its
 always-on discovery instructions remain, and the next user prompt receives the
 reflection reminder only. The package does not install a scheduler or copy a
 knowledge corpus. The setup skill replaces the marker with the absolute
-launcher from the verified Python 3.11 virtual environment.
+launcher from the verified Python 3.11+ virtual environment.
 
 APM writes package-owned hook records under `.codex/apm-hooks.json`,
 `.claude/apm-hooks.json` and

@@ -197,16 +197,19 @@ python3 /path/to/knowledge-setup/scripts/setup_runtime.py \
   --consumer /work/orders-api
 ~~~
 
-The helper requires uv and an installed CPython 3.11.x, creates or reuses
+The helper requires uv and an installed CPython 3.11 or newer, creates or reuses
 `<workspace-config-parent>/.agent-knowledge-venv` by default, installs the
 supplied source checkout or wheel, then runs the installed `agent-knowledge`
 describe, context and configured doctor. With `--profile` and optional absolute
 `--settings`, the installed core resolves the effective selection and verifies
 that its base path equals the bootstrap `--workspace` before binding hooks. It
 verifies the actual interpreter version inside both new and reused environments;
-`pyvenv.cfg` alone is not accepted. If Python 3.11 cannot be located, stop and
-ask the developer to install it (for example, `uv python install 3.11`) before
-retrying. It targets `codex,claude,copilot` by default. In `managed` mode it
+`pyvenv.cfg` alone is not accepted. Reuse a compatible existing environment,
+including newer Python versions; do not require a downgrade to 3.11. New
+environments use an installed CPython matching `>=3.11`, without downloading
+Python automatically. If none can be located, ask the developer to install a
+supported version (for example, `uv python install 3.11`) before retrying.
+It targets `codex,claude,copilot` by default. In `managed` mode it
 runs APM install/compile for those targets; in `bind` mode the repository must
 already have done so. APM installs the package-owned discovery
 hook marker at the same time; setup then replaces that marker with the

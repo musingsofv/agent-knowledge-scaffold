@@ -26,7 +26,7 @@ _TARGET_ORDER = ("codex", "claude", "copilot")
 _TARGETS = frozenset(_TARGET_ORDER)
 _COMMAND_TIMEOUT = 300
 _DESCRIPTOR_HOOK_COMMAND = "agent-knowledge-hook"
-_REQUIRED_PYTHON = (3, 11)
+_MINIMUM_PYTHON = (3, 11)
 _LIFECYCLE_EVENTS = ("SessionStart", "UserPromptSubmit")
 _COPILOT_EVENTS = ("sessionStart", "userPromptTransformed")
 _ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
@@ -300,15 +300,15 @@ def _read_python_version(python: Path, steps: list[Step]) -> tuple[int, int, int
     except (OSError, subprocess.TimeoutExpired) as error:
         raise SetupFailure(
             "python-unavailable",
-            "Python 3.11 is required, but the selected interpreter could not be run. "
-            "Install Python 3.11 and retry setup.",
+            "Python 3.11 or newer is required, but the selected interpreter could not be run. "
+            "Install Python 3.11 or newer and retry setup.",
             steps,
         ) from error
     if result.returncode:
         raise SetupFailure(
             "python-unavailable",
-            "Python 3.11 is required, but the selected interpreter failed its version check. "
-            "Install Python 3.11 and retry setup.",
+            "Python 3.11 or newer is required, but the selected interpreter failed its version check. "
+            "Install Python 3.11 or newer and retry setup.",
             steps,
         )
     output = (result.stdout or result.stderr).strip()
@@ -316,7 +316,7 @@ def _read_python_version(python: Path, steps: list[Step]) -> tuple[int, int, int
     if not separator:
         raise SetupFailure(
             "python-version-unknown",
-            "The selected interpreter did not report a Python version. Install Python 3.11 "
+            "The selected interpreter did not report a Python version. Install Python 3.11 or newer "
             "and retry setup.",
             steps,
         )
@@ -327,30 +327,39 @@ def _read_python_version(python: Path, steps: list[Step]) -> tuple[int, int, int
         raise SetupFailure(
             "python-version-unknown",
             "The selected interpreter reported an unreadable Python version. Install Python "
-            "3.11 and retry setup.",
+            "3.11 or newer and retry setup.",
             steps,
         ) from error
     return version
 
 
-def _require_python311(python: Path, steps: list[Step], *, source: str) -> None:
+def _require_supported_python(python: Path, steps: list[Step], *, source: str) -> None:
     version = _read_python_version(python, steps)
-    if version[:2] != _REQUIRED_PYTHON:
+    if version[:2] < _MINIMUM_PYTHON:
         rendered = ".".join(str(part) for part in version)
         raise SetupFailure(
             "python-version-mismatch",
-            f"{source} uses Python {rendered}; Python 3.11 is required. Install Python 3.11 "
-            "and remove or replace this environment before retrying setup.",
+            f"{source} uses Python {rendered}; Python 3.11 or newer is required. "
+            "Install Python 3.11 or newer and remove or replace this environment "
+            "before retrying setup.",
             steps,
         )
     steps.append(Step("python", f"{version[0]}.{version[1]}.{version[2]}"))
 
 
-def _find_python311(uv: str, steps: list[Step]) -> Path:
-    """Find an installed Python 3.11 without silently downloading another runtime."""
+def _find_supported_python(uv: str, steps: list[Step]) -> Path:
+    """Find an installed CPython 3.11+ without downloading another runtime."""
     try:
         result = subprocess.run(
-            [uv, "python", "find", "3.11", "--no-project"],
+            [
+                uv,
+                "python",
+                "find",
+                "cpython>=3.11",
+                "--no-project",
+                "--system",
+                "--no-python-downloads",
+            ],
             stdin=subprocess.DEVNULL,
             capture_output=True,
             text=True,
@@ -360,14 +369,14 @@ def _find_python311(uv: str, steps: list[Step]) -> Path:
     except (OSError, subprocess.TimeoutExpired) as error:
         raise SetupFailure(
             "python-version-unavailable",
-            "Python 3.11 is required and could not be located. Install Python 3.11 "
+            "Python 3.11 or newer is required and could not be located. Install Python 3.11 or newer "
             "(for example, with `uv python install 3.11`) and retry setup.",
             steps,
         ) from error
     if result.returncode:
         raise SetupFailure(
             "python-version-unavailable",
-            "Python 3.11 is required but is not installed. Install Python 3.11 "
+            "Python 3.11 or newer is required but is not installed. Install Python 3.11 or newer "
             "(for example, with `uv python install 3.11`) and retry setup.",
             steps,
         )
@@ -376,12 +385,12 @@ def _find_python311(uv: str, steps: list[Step]) -> Path:
     if not candidate.is_file():
         raise SetupFailure(
             "python-version-unavailable",
-            "Python 3.11 is required but no usable interpreter was found. Install Python 3.11 "
-            "and retry setup.",
+            "Python 3.11 or newer is required but no usable interpreter was found. "
+            "Install Python 3.11 or newer and retry setup.",
             steps,
         )
     candidate = candidate.resolve()
-    _require_python311(candidate, steps, source="The selected Python interpreter")
+    _require_supported_python(candidate, steps, source="The selected Python interpreter")
     return candidate
 
 
@@ -394,7 +403,7 @@ def _prepare_venv(venv: Path, uv: str, steps: list[Step]) -> tuple[Path, Path]:
         python, _ = _venv_executables(path)
         marker = path / "pyvenv.cfg"
         if marker.is_file() and python.is_file():
-            _require_python311(python, steps, source="The existing virtual environment")
+            _require_supported_python(python, steps, source="The existing virtual environment")
             validated = True
             steps.append(Step("venv", "reused"))
         elif any(path.iterdir()):
@@ -404,7 +413,7 @@ def _prepare_venv(venv: Path, uv: str, steps: list[Step]) -> tuple[Path, Path]:
                 steps,
             )
         else:
-            python_source = _find_python311(uv, steps)
+            python_source = _find_supported_python(uv, steps)
             _run(
                 [uv, "venv", "--python", str(python_source), str(path)],
                 cwd=path.parent,
@@ -413,7 +422,7 @@ def _prepare_venv(venv: Path, uv: str, steps: list[Step]) -> tuple[Path, Path]:
             )
     else:
         path.parent.mkdir(parents=True, exist_ok=True)
-        python_source = _find_python311(uv, steps)
+        python_source = _find_supported_python(uv, steps)
         _run(
             [uv, "venv", "--python", str(python_source), str(path)],
             cwd=path.parent,
@@ -429,7 +438,7 @@ def _prepare_venv(venv: Path, uv: str, steps: list[Step]) -> tuple[Path, Path]:
         )
     # Validate the interpreter produced by uv as well as the source selected above.
     if not validated:
-        _require_python311(python, steps, source="The created virtual environment")
+        _require_supported_python(python, steps, source="The created virtual environment")
     return python, launcher
 
 
@@ -1452,7 +1461,7 @@ def run_setup(
         raise SetupFailure(
             "hook-launcher-missing",
             "The installed environment has no agent-knowledge-hook launcher. "
-            "Reinstall the package into the verified Python 3.11 environment and retry setup.",
+            "Reinstall the package into the verified Python 3.11+ environment and retry setup.",
             steps,
         )
     describe = _json_result(

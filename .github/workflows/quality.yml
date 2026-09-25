@@ -12,11 +12,15 @@ permissions:
 jobs:
   quality:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13', '3.14']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: ${{ matrix.python }}
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
@@ -37,4 +41,4 @@ jobs:
       - name: Build distributions
         run: uv build --out-dir .cache/dist
       - name: Verify fresh APM consumption
-        run: tests/e2e/fresh-consumer-smoke --output .cache/fresh-consumer.json
+        run: tests/e2e/fresh-consumer-smoke --python '${{ matrix.python }}' --output .cache/fresh-consumer.json

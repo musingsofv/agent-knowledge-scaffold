@@ -36,6 +36,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--output", type=Path, help="Write the JSON evidence report to this path.")
     parser.add_argument("--keep", action="store_true", help="Keep the temporary consumer and logs.")
     parser.add_argument(
+        "--python",
+        default="cpython>=3.11",
+        help="Installed CPython request or path (default: any installed CPython 3.11+).",
+    )
+    parser.add_argument(
         "--live-cli",
         action="store_true",
         help="Run no-auth --version and --help checks for available harness CLIs.",
@@ -694,7 +699,7 @@ def _live_cli_checks(env: dict[str, str], logs: Path) -> list[dict[str, Any]]:
     return checks
 
 
-def run_smoke(*, keep: bool, live_cli: bool) -> dict[str, Any]:
+def run_smoke(*, keep: bool, live_cli: bool, python_request: str) -> dict[str, Any]:
     root = _repo_root()
     apm = _command("apm")
     uv = _command("uv")
@@ -719,7 +724,7 @@ def run_smoke(*, keep: bool, live_cli: bool) -> dict[str, Any]:
     consumer = temp_root / "consumer"
     prerequisite_bin = temp_root / "prerequisite-bin"
     prerequisite_bin.mkdir()
-    path_entries = [prerequisite_bin, apm.parent, uv.parent, git.parent, python.parent]
+    path_entries = [prerequisite_bin, apm.parent, uv.parent, git.parent]
     # Copilot is distributed as a Node launcher.  Keep the interpreter on the
     # deliberately minimal PATH so a version check exercises the installed
     # CLI rather than failing before the CLI starts.
@@ -752,7 +757,7 @@ def run_smoke(*, keep: bool, live_cli: bool) -> dict[str, Any]:
         _assert(len(wheels) == 1, f"Expected one wheel in {dist}, found {len(wheels)}.")
         wheel = wheels[0]
         _run(
-            [str(uv), "venv", str(venv)],
+            [str(uv), "venv", "--python", python_request, "--no-python-downloads", str(venv)],
             cwd=root,
             env=os.environ.copy(),
             logs=logs,
@@ -790,19 +795,21 @@ def run_smoke(*, keep: bool, live_cli: bool) -> dict[str, Any]:
             logs=logs,
             label="verify-prerequisite-python",
         )
+        implementation, version_text = prerequisite_check.stdout.strip().split()
+        prerequisite_version = tuple(int(part) for part in version_text.split("."))
         _assert(
-            prerequisite_check.stdout.strip() == "cpython 3.11",
-            "Outer wheel-test environment did not resolve to CPython 3.11.",
+            implementation == "cpython" and prerequisite_version >= (3, 11),
+            "Outer wheel-test environment did not resolve to CPython 3.11 or newer.",
         )
-        python311 = prerequisite_bin / "python3.11"
-        python311.symlink_to(prerequisite_python)
+        prerequisite_entry = prerequisite_bin / "python3"
+        prerequisite_entry.symlink_to(prerequisite_python)
         _assert(
-            python311.resolve() == prerequisite_python,
+            prerequisite_entry.resolve() == prerequisite_python,
             "Fresh consumer prerequisite Python did not preserve its verified interpreter path.",
         )
         _assert(
-            [entry.name for entry in prerequisite_bin.iterdir()] == ["python3.11"],
-            "Fresh consumer prerequisite directory exposed more than Python 3.11.",
+            [entry.name for entry in prerequisite_bin.iterdir()] == ["python3"],
+            "Fresh consumer prerequisite directory exposed more than the selected Python.",
         )
         _assert(
             not (prerequisite_bin / _DESCRIPTOR_HOOK_COMMAND).exists(),
@@ -1060,6 +1067,10 @@ def run_smoke(*, keep: bool, live_cli: bool) -> dict[str, Any]:
         _assert(
             setup.get("venv") == str((consumer / ".agent-knowledge-venv").resolve()),
             "Setup helper did not derive the scaffold-local virtual environment.",
+        )
+        _assert(
+            (Path(setup["venv"]) / "bin" / "python").resolve() == prerequisite_python,
+            "Setup did not use the selected installed prerequisite interpreter.",
         )
         _assert(
             setup.get("targets") == ["codex", "claude", "copilot"],
@@ -1899,6 +1910,7 @@ def run_smoke(*, keep: bool, live_cli: bool) -> dict[str, Any]:
         "apm": str(apm),
         "uv": str(uv),
         "python": str(python_in_venv),
+        "python_version": version_text,
         "consumer_root": str(consumer),
         "retained": keep,
         "targets": ["codex", "claude", "copilot"],
@@ -1969,7 +1981,7 @@ def run_smoke(*, keep: bool, live_cli: bool) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        report = run_smoke(keep=args.keep, live_cli=args.live_cli)
+        report = run_smoke(keep=args.keep, live_cli=args.live_cli, python_request=args.python)
     except SmokeFailure as error:
         payload: dict[str, Any] = {
             "schema": "fresh-consumer-smoke.v1",

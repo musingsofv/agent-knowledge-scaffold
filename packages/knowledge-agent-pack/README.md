@@ -45,14 +45,15 @@ helper-owned flow. See the
 for the exact integration boundaries and commands.
 
 The normal path is to invoke `knowledge-setup`; it checks for an installed
-CPython 3.11.x, creates the scaffold-local runtime and installs the Python
-package for you. If Python 3.11 is unavailable, setup reports the install
-remediation and does not fall back to another interpreter. For a direct smoke
+CPython 3.11 or newer, creates or reuses a compatible scaffold-local runtime and
+installs the Python package for you. Newer Python environments are retained.
+If no supported Python is installed, setup reports the install remediation
+without downloading Python automatically or using an older version. For a direct smoke
 or deliberate manual override, install the Python runtime separately. During
 local development the wheel can be installed into a dedicated environment:
 
 ```bash
-uv venv --python 3.11 --no-managed-python .agent-knowledge-venv
+uv venv --python 'cpython>=3.11' --no-python-downloads .agent-knowledge-venv
 uv pip install --python .agent-knowledge-venv/bin/python \
   /path/to/agent-knowledge-scaffold
 export PATH="$PWD/.agent-knowledge-venv/bin:$PATH"
@@ -87,7 +88,7 @@ reflection reminder only. The package does not install a scheduler.
 The hook is package-owned and idempotent. APM first records one
 `agent-knowledge-hook` marker for each selected provider; `knowledge-setup`
 then replaces that marker with the absolute `agent-knowledge-hook` executable
-from the verified 3.11 environment. The setup report includes the exact
+from the verified Python 3.11+ environment. The setup report includes the exact
 launcher command and provider registration path, and reconciles both Copilot
 hook hashes in `apm.lock.yaml` so package-only uninstall remains safe after
 setup. Hand-authored hook entries remain in place. Inspect `apm deps list` for

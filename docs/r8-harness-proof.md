@@ -36,6 +36,31 @@ uv run python tests/e2e/fresh_consumer_smoke.py \
   --output .cache/r8-fresh-consumer.json
 ```
 
+The smoke defaults to a supported installed CPython, independently of the
+interpreter running the script. To verify setup with a particular installed
+CPython 3.11+ version, pass `--python`, for example:
+
+```bash
+uv run python tests/e2e/fresh_consumer_smoke.py --python 3.14 \
+  --output .cache/r8-fresh-consumer-python314.json
+```
+
+It exposes that interpreter to the isolated consumer, checks that setup selects
+it, and exercises environment reuse, CLI operations and all three provider hook
+fixtures. It does not download a Python interpreter. CI runs the core and this
+installation proof on Python 3.11, 3.12, 3.13 and 3.14; live model proof remains
+separate.
+
+Local verification on 2026-09-25 passed fresh setup, reuse, CLI operations and
+all three provider hook fixtures with CPython 3.11.8, 3.12.12, 3.13.12 and
+3.14.6. The default launcher also passed when started by the system Python,
+selecting a supported installed interpreter for the consumer.
+The full suite passed 1,385 tests on 3.11, 3.12 and 3.14. On 3.13, 1,384 passed
+and the existing macOS receipt-lock creation race failed
+`test_concurrent_appends_preserve_every_complete_record`; a focused retry also
+failed. This remains a separate filesystem issue previously observed on 3.11,
+not an exact-version setup rejection. Runtime receipt code is unchanged here.
+
 For a prepared consumer, the provider-only fixture driver is:
 
 ```bash

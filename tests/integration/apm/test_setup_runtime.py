@@ -908,16 +908,53 @@ def test_setup_updates_copilot_deployment_hash_after_binding_launcher(tmp_path: 
     assert steps[0].status == "updated"
 
 
-def test_existing_venv_version_mismatch_explains_python311_remediation(tmp_path: Path) -> None:
+@pytest.mark.parametrize("version", ["3.9.6", "3.10.14"])
+def test_existing_venv_rejects_python_below_minimum(tmp_path: Path, version: str) -> None:
     module = _setup_module()
     python = tmp_path / "python"
-    python.write_text("#!/bin/sh\nprintf 'Python 3.10.14\\n'\n", encoding="utf-8")
+    python.write_text(f"#!/bin/sh\nprintf 'Python {version}\\n'\n", encoding="utf-8")
     python.chmod(0o755)
 
-    with pytest.raises(module.SetupFailure, match="Python 3.11 is required") as error:
-        module._require_python311(python, [], source="The existing virtual environment")
+    with pytest.raises(module.SetupFailure, match="Python 3.11 or newer is required") as error:
+        module._require_supported_python(python, [], source="The existing virtual environment")
 
     assert error.value.code == "python-version-mismatch"
+
+
+@pytest.mark.parametrize("version", ["3.11.0", "3.12.12", "3.13.12", "3.14.6", "3.20.0"])
+def test_existing_supported_venv_is_reused_without_provisioning(
+    tmp_path: Path, version: str
+) -> None:
+    module = _setup_module()
+    venv = tmp_path / "venv"
+    python = venv / "bin" / "python"
+    python.parent.mkdir(parents=True)
+    python.write_text(f"#!/bin/sh\nprintf 'Python {version}\\n'\n", encoding="utf-8")
+    python.chmod(0o755)
+    (venv / "pyvenv.cfg").write_text("home = /fixture/python\n")
+    steps = []
+
+    selected, launcher = module._prepare_venv(venv, "/missing/uv", steps)
+
+    assert selected == python
+    assert launcher == venv / "bin" / "agent-knowledge"
+    assert [(step.name, step.status) for step in steps] == [
+        ("python", version),
+        ("venv", "reused"),
+    ]
+
+
+def test_missing_supported_python_reports_install_remediation(tmp_path: Path) -> None:
+    module = _setup_module()
+    uv = tmp_path / "uv"
+    uv.write_text("#!/bin/sh\nexit 1\n", encoding="utf-8")
+    uv.chmod(0o755)
+
+    with pytest.raises(module.SetupFailure, match="Python 3.11 or newer") as error:
+        module._find_supported_python(str(uv), [])
+
+    assert error.value.code == "python-version-unavailable"
+    assert "uv python install 3.11" in str(error.value)
 
 
 def test_package_discovery_rejects_ambiguous_hook_bundles(tmp_path: Path) -> None:
