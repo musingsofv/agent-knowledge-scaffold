@@ -311,6 +311,13 @@ one targeted next step; they do not silently disable the intended workflow.
 See the setup skill's [publication procedure](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/publication.md).
 The CLI still treats an absent publication block as disabled. Compounding creates
 no empty PR and never merges automatically; unresolved updates retain signals.
+Enabling compounding also authorizes PRs for authored skills and instructions in
+every participating consumer repository. Setup records their verified routes in
+the shared automation and preserves explicit user exceptions. Adding another
+consumer does not require another publication opt-in: the agent prepares and
+validates the change, opens or updates the owning repository's PR, and reports
+it as ready for your review. It retains signals only for unresolved work, not
+merely because the PR is awaiting your review or merge.
 The skill never reads organization membership from a directory name or ambient
 variable. It then runs the bundled runtime helper, creates or reuses
 `<scaffold>/.agent-knowledge-venv`, installs the runtime, verifies describe and

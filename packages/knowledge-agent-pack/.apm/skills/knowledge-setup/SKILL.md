@@ -32,6 +32,9 @@ recommendation, bootstrap order and automation selectors.
 Read [Configure reviewed knowledge publication](references/publication.md) to
 derive and verify the default GitHub PR destination from the canonical knowledge
 checkout, preserve existing publication choices and report pending access.
+It also establishes standing compounding PR authorization for all participating
+consumers and records their routes in the shared automation; human review and
+merge remain separate from opening a PR.
 When adopting a fresh scaffold clone, or configuring an existing scaffold-derived
 knowledge instance, read [Scaffold maintenance and upgrades](references/scaffold-upgrades.md)
 before selecting publication. It owns conversion of the clone into one instance
@@ -409,6 +412,12 @@ dispositions and retained/drained inputs. Do not merge PRs or force-push.
 Add the marker to the task name or provider metadata, not to a secret or a
 knowledge claim. Preserve the harness name, absolute config/runtime paths and
 the provider's opaque automation/session handle when the provider exposes one.
+For every provider, include the verified consumer routes and standing PR policy
+from [publication setup](references/publication.md#include-every-participating-consumer).
+Update that list when another consumer joins the shared store. Remove stale
+agent-authored demands for separate publication permission that conflict with
+the user's authorization; preserve explicit user exceptions. This policy lets
+the task present PRs for review instead of stopping before it has a proposal.
 The recurring task invokes knowledge-compound; it does not run APM compilation
 or a repository daemon.
 

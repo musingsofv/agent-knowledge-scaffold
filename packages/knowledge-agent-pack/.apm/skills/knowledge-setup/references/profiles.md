@@ -181,6 +181,10 @@ force-push. Marker: agent-knowledge-compound:workspace:personal
 ```
 
 For direct setup, substitute `--config /absolute/knowledge-workspace.yaml`.
+Include the participating consumer routes and standing compounding PR policy
+from [publication setup](publication.md#include-every-participating-consumer).
+When another consumer shares the profile/store, update that same task's routes;
+do not add a separate publication opt-in or narrow the task to its working directory.
 Do not depend on the global default. Changes to cadence, launcher or provider
 registration take effect through setup updating the native task. Profile edits
 affect future explicit CLI calls; active compounding runs reject changed routing.

@@ -93,6 +93,39 @@ can contain the same owned rule; do not author duplicate copies to maintain them
 
 ## Publish the owner that was actually changed
 
+### Standing authorization for consumer PRs
+
+Enabling compounding includes authorization to prepare validated changes, push
+an isolated branch and open or update a PR for human review in the configured
+knowledge repository and every participating consumer repository. This covers
+canonical knowledge and the consumer's authored skills, instructions and their
+supporting references, templates or scripts. It does not authorize unrelated
+product changes, automatic merging or force-pushing. Preserve an explicit user
+opt-out or narrower scope; do not invent a per-repository opt-in or treat an
+older agent-authored restriction as a user decision.
+
+Use the participating-consumer routes recorded by setup in the automation
+prompt, or the user's explicit context for a manual run. A shared profile or
+inbox does not restrict publication to the automation's working directory.
+Adding a consumer carries the same compounding PR policy unless the user says
+otherwise. Resolve its verified remote, base branch and authored source using
+repository instructions and installation metadata; deriving those values is
+work for the agent, not another permission request. A repository mentioned only
+in a signal or an installed third-party dependency is not automatically a
+participating consumer, and token access alone does not establish ownership.
+
+For example, a shared inbox serving a mobile app and a website can produce a
+knowledge PR and a website-local skill PR in their respective repositories.
+The website correction does not need another publication opt-in. A defect in
+an unrelated external package still requires resolving that owner's route.
+
+After publication, report the PR link as **ready for human review**, not blocked
+on authorization. Human review/merge remains the approval boundary; verified
+PR publication is sufficient for the existing guarded drain procedure, without
+waiting for merge. If ownership, access or required validation really is
+unavailable, retain the affected input with the exact missing prerequisite and
+continue independent work. A local patch awaiting push is not a published PR.
+
 Resolve the authoritative package or repository before any skill/instruction
 edit. Preserve a safe source identity and relevant version/evidence reference
 in the disposition; a display name or copied local installation alone is
@@ -107,8 +140,10 @@ outcome. Current drain evidence covers one publication repository per request.
 Keep a signal requiring changes across repositories deferred with the relevant
 proposals and evidence; one repository's publication cannot complete all owners.
 
-If the source, authorization or publication route is unavailable, keep an
-actionable deferred signal/proposal naming the candidate and missing prerequisite.
+If the source or publication route is unavailable, or an explicit user
+restriction excludes the change, keep an actionable deferred signal/proposal
+naming the candidate and missing prerequisite. Do not defer a participating
+consumer's PR merely to request authorization already supplied by setup.
 Finding an external owner is not verified publication and does not justify
 draining its unresolved update. Keep agent-reported publication evidence distinct
 from independently verified results. Receipts and signal archives are written

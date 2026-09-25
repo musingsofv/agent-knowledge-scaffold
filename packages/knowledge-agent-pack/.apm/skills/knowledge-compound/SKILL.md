@@ -259,8 +259,12 @@ PR, an unrelated code PR, or an empty PR. Merge the current configured base norm
 ordinary conflicts without force-push, validate and push the intended commit,
 then verify the remote commit and PR head. A human merges or closes the PR.
 
-For skill/instruction updates, follow the authoring repository's authorized
-publication route in owner discovery. A skill-only update needs no central PR.
+For skill/instruction updates, follow
+[standing consumer PR authorization](references/owner-discovery.md#standing-authorization-for-consumer-prs)
+and the authoring repository's publication route. Participating consumers are
+authorized for compounding PRs; do not add another approval gate before opening
+one. A skill-only update needs no central PR. Report published PRs as ready for
+human review; review is not a blocked compounding run.
 If a required update has no available publication route, defer it with an
 actionable proposal and retain the signal. Record a no-write disposition only
 when evaluation establishes that no change is needed or the finding is out of

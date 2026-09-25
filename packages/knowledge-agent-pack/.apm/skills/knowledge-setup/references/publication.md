@@ -72,6 +72,35 @@ adding it. Do not treat either inferred opt-out or inferred approval as fact.
 
 ## Publication behavior
 
+### Include every participating consumer
+
+Read "Standing authorization for consumer PRs" in the installed
+`knowledge-compound` skill's `references/owner-discovery.md` and apply that policy.
+The setup proposal includes compounding PRs for central knowledge and authored
+skills/instructions in all participating consumer repositories, with human
+review and merge. Reuse the user's authorization; no extra per-consumer opt-in
+is required. Preserve actual user restrictions rather than carrying forward an
+agent's unsupported assumption that another permission request is necessary.
+
+When creating or updating the native automation, record the participating
+consumer checkout paths, verified repository identities and base branches, and
+point to each repository's authored-source/native-check instructions. Keep this
+route list once in that task prompt, including any explicit user exceptions.
+Adding a repository to a shared profile updates the same automation and route
+list; it does not create a duplicate job or restrict it to the first consumer.
+Manual compounding can use the same routes supplied in the user's context.
+Do not add unsupported consumer-publication keys to the workspace YAML: source
+publication blocks configure central knowledge, while skill/instruction PRs
+follow the owning consumer's repository route.
+
+For example, a task serving `studio/mobile` and `studio/website` can say:
+"Compounding PRs are authorized for both consumers' authored skills and
+instructions, and for the configured central knowledge source. Resolve owners
+and run their native checks, then open/update PRs for human review. Do not merge
+them." Include verified local paths and base branches alongside that policy.
+Never select a reusable upstream as a central knowledge destination or treat
+an unrelated dependency as a consumer solely because credentials can write it.
+
 Setup configures the route; `knowledge-compound` owns publication. It reuses an
 eligible current-user PR or opens one only when validated changes exist, and
 verifies the remote commit and PR head. A human merges or closes it. No changes
