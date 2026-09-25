@@ -146,6 +146,7 @@ def test_profile_environment_names_are_unique(field: str) -> None:
         "PS4",
         "BASH_XTRACEFD",
         "HOME",
+        "AGENT_KNOWLEDGE_SETTINGS",
         "CLAUDE_ENV_FILE",
         "LD_PRELOAD",
         "EUID",

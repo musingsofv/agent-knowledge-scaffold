@@ -33,6 +33,7 @@ _ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _SESSION_PIN_MAX_BYTES = 16_384
 _RESERVED_ENVIRONMENT_TARGETS = frozenset(
     {
+        "AGENT_KNOWLEDGE_SETTINGS",
         "BASHPID",
         "BASH_ARGC",
         "BASH_ARGV",
@@ -145,6 +146,11 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--profile", help="Verify this explicit installed knowledge profile.")
     parser.add_argument("--settings", type=Path, help="Absolute profile registry path.")
     parser.add_argument(
+        "--portable-hooks",
+        action="store_true",
+        help="Bind PATH-based hooks using --profile and each environment's local registry.",
+    )
+    parser.add_argument(
         "--venv",
         type=Path,
         help="Virtual environment path (default: <workspace-config-parent>/.agent-knowledge-venv).",
@@ -237,7 +243,13 @@ def _provider_hook_command(
     target: str,
     event_name: str,
     environment: dict[str, object] | None,
+    *,
+    portable_profile: str | None = None,
 ) -> str:
+    if portable_profile is not None:
+        return _shell_command(
+            [_DESCRIPTOR_HOOK_COMMAND, "--provider", target, "--profile", portable_profile]
+        )
     arguments = [str(launcher), "--provider", target]
     if target == "claude" and event_name == "SessionStart":
         arguments.extend(_claude_environment_arguments(environment))
@@ -788,7 +800,7 @@ def _active_hook_count(document: object, launcher: Path, event_name: str, comman
         if isinstance(group, dict) and isinstance(group.get("hooks"), list)
         for entry in group["hooks"]
         if isinstance(entry, dict)
-        and _hook_command(entry, launcher=launcher)
+        and (_hook_command(entry, launcher=launcher) or _hook_command(entry))
         and entry.get("command") == command
     )
 
@@ -811,6 +823,8 @@ def _configure_copilot_hooks(
     path: Path,
     launcher: Path,
     environment: dict[str, object] | None,
+    *,
+    portable_profile: str | None = None,
 ) -> dict[str, str]:
     """Replace APM's compatibility projection with Copilot's native schema."""
     document = _read_hook_document(path, "Copilot")
@@ -828,7 +842,9 @@ def _configure_copilot_hooks(
             [],
         )
     commands = {
-        event_name: _provider_hook_command(launcher, "copilot", event_name, environment)
+        event_name: _provider_hook_command(
+            launcher, "copilot", event_name, environment, portable_profile=portable_profile
+        )
         for event_name in _COPILOT_EVENTS
     }
     native_hooks = {
@@ -848,12 +864,12 @@ def _configure_copilot_hooks(
     return commands
 
 
-def _bind_package_hook(package: Path, launcher: Path) -> None:
-    """Make the installed package descriptor declare the venv-owned command."""
+def _bind_package_hook(package: Path, launcher: Path, *, portable: bool = False) -> None:
+    """Declare the selected installed or PATH-based command in the owned descriptor."""
     path = package / ".apm" / "hooks" / "knowledge-discovery.json"
     document = _read_hook_document(path, "package")
     hooks = document.get("hooks") if isinstance(document, dict) else None
-    command = _launcher_command(launcher)
+    command = _DESCRIPTOR_HOOK_COMMAND if portable else _launcher_command(launcher)
     changed = False
     for event_name in _LIFECYCLE_EVENTS:
         groups = hooks.get(event_name) if isinstance(hooks, dict) else None
@@ -881,6 +897,7 @@ def _configure_hook_registrations(
     *,
     environment: dict[str, object] | None = None,
     python: Path = Path(sys.executable),
+    portable_profile: str | None = None,
 ) -> dict[str, object]:
     """Replace the descriptor marker with the installed venv hook launcher."""
     if not targets:
@@ -897,7 +914,9 @@ def _configure_hook_registrations(
                 )
             document = _read_hook_document(path, target)
             for event_name in _LIFECYCLE_EVENTS:
-                command = _provider_hook_command(launcher, target, event_name, environment)
+                command = _provider_hook_command(
+                    launcher, target, event_name, environment, portable_profile=portable_profile
+                )
                 owned = _owned_hook_groups(
                     document,
                     source,
@@ -924,7 +943,9 @@ def _configure_hook_registrations(
                     entries[0]["command"] = command
                     _write_hook_document(path, document)
             for event_name in _LIFECYCLE_EVENTS:
-                command = _provider_hook_command(launcher, target, event_name, environment)
+                command = _provider_hook_command(
+                    launcher, target, event_name, environment, portable_profile=portable_profile
+                )
                 _normalize_active_hook(
                     _active_hook_path(consumer, target),
                     target,
@@ -941,13 +962,14 @@ def _configure_hook_registrations(
                 "APM did not write the Copilot hook registration.",
                 [],
             )
-        _configure_copilot_hooks(path, launcher, environment)
+        _configure_copilot_hooks(path, launcher, environment, portable_profile=portable_profile)
     return _verify_hook_registrations(
         consumer,
         targets,
         launcher=launcher,
         environment=environment,
         python=python,
+        portable_profile=portable_profile,
     )
 
 
@@ -1096,6 +1118,7 @@ def _verify_hook_registrations(
     launcher: Path,
     environment: dict[str, object] | None = None,
     python: Path = Path(sys.executable),
+    portable_profile: str | None = None,
 ) -> dict[str, object]:
     """Verify one APM-owned registration exists for every requested target."""
     if not targets:
@@ -1114,10 +1137,16 @@ def _verify_hook_registrations(
             document = _read_hook_document(path, target)
             commands: dict[str, str] = {}
             for event_name in _LIFECYCLE_EVENTS:
-                command = _provider_hook_command(launcher, target, event_name, environment)
+                command = _provider_hook_command(
+                    launcher, target, event_name, environment, portable_profile=portable_profile
+                )
                 commands[event_name] = command
                 owned = _owned_hook_groups(
-                    document, source, event_name=event_name, launcher=launcher
+                    document,
+                    source,
+                    event_name=event_name,
+                    launcher=launcher,
+                    include_descriptor=portable_profile is not None,
                 )
                 if len(owned) != 1:
                     raise SetupFailure(
@@ -1175,11 +1204,13 @@ def _verify_hook_registrations(
                     f"found {len(entries) if isinstance(entries, list) else 0}.",
                     [],
                 )
-            command = _provider_hook_command(launcher, "copilot", event_name, environment)
+            command = _provider_hook_command(
+                launcher, "copilot", event_name, environment, portable_profile=portable_profile
+            )
             commands[event_name] = command
             entry = entries[0]
             if (
-                not _hook_command(entry, launcher=launcher)
+                not (_hook_command(entry, launcher=launcher) or _hook_command(entry))
                 or entry.get("command") != command
                 or entry.get("type") != "command"
                 or entry.get("timeoutSec") != 3
@@ -1202,7 +1233,12 @@ def _verify_hook_registrations(
             "events": list(_COPILOT_EVENTS),
             "commands": commands,
         }
-    return {"status": "ready", "targets": list(targets), "registrations": registrations}
+    return {
+        "status": "ready",
+        "mode": "portable" if portable_profile is not None else "absolute",
+        "targets": list(targets),
+        "registrations": registrations,
+    }
 
 
 def _environment_launcher(
@@ -1213,6 +1249,7 @@ def _environment_launcher(
     consumer: Path,
     targets: tuple[str, ...] = _TARGET_ORDER,
     environment_readiness: str | None = None,
+    portable_profile: str | None = None,
 ) -> dict[str, object]:
     """Create one content-addressed provider launcher containing no values."""
     raw = context.get("environment")
@@ -1315,6 +1352,8 @@ def _environment_launcher(
             "The selected environment has too many mappings for Claude session state.",
             steps,
         )
+    if portable_profile is not None:
+        return _portable_environment_report(portable_profile, targets, file_value, safe_variables)
     declaration = {
         "file": file_value,
         "variables": safe_variables,
@@ -1469,6 +1508,85 @@ def _verify_selection(
         )
 
 
+def _verify_portable_runtime(
+    context: dict[str, Any], launcher: Path, hook_launcher: Path, steps: list[Step]
+) -> None:
+    """Verify the PATH runtime and registry that the unchanged hook will use."""
+    for name, expected in (
+        ("agent-knowledge", launcher),
+        (_DESCRIPTOR_HOOK_COMMAND, hook_launcher),
+    ):
+        found = shutil.which(name)
+        if found is None or Path(found).resolve() != expected.resolve():
+            raise SetupFailure(
+                "portable-launcher-unavailable",
+                f"PATH must resolve {name} to the selected runtime before portable binding.",
+                steps,
+                "Put the selected venv bin directory on PATH in the harness/container environment.",
+            )
+    selection = context.get("selection")
+    assert isinstance(selection, dict) and isinstance(selection.get("profile"), str)
+    try:
+        actual = _json_result(
+            [str(launcher), "--profile", selection["profile"], "context"],
+            cwd=Path.cwd(),
+            name="portable-profile",
+            steps=steps,
+        )
+        if actual.get("selection") == selection:
+            return
+    except SetupFailure:
+        pass
+    raise SetupFailure(
+        "portable-registry-mismatch",
+        "The portable hook's runtime registry does not resolve the verified profile selection.",
+        steps,
+        "Use the standard user registry or set AGENT_KNOWLEDGE_SETTINGS to the selected absolute "
+        "registry path in this environment. Explicit --settings is not embedded in portable hooks.",
+    )
+
+
+def _portable_environment_report(
+    profile: str, targets: tuple[str, ...], file_value: str, variables: list[dict[str, str]]
+) -> dict[str, object]:
+    """Report runtime-resolved activation without writing machine-specific launchers."""
+    providers: dict[str, object] = {}
+    for target in _TARGET_ORDER:
+        if target not in targets:
+            providers[target] = {"status": "not-bound"}
+        elif target == "claude":
+            providers[target] = {
+                "status": "native-session-start",
+                "detail": "New sessions resolve the named local profile through CLAUDE_ENV_FILE; "
+                "resumed sessions retain their first credential declaration.",
+            }
+        else:
+            providers[target] = {
+                "status": "cli-launch",
+                "command": _shell_command(
+                    [
+                        _DESCRIPTOR_HOOK_COMMAND,
+                        "--profile",
+                        profile,
+                        "--launch-provider",
+                        target,
+                        "--",
+                    ]
+                ),
+                "app": "No generic per-task env-file injection; use native stores or "
+                "explicit credentialed-command sourcing.",
+            }
+    return {
+        "status": "ready",
+        "profile": profile,
+        "environment_file": file_value,
+        "variables": variables,
+        "session_policy": "one-profile-per-session",
+        "launcher": None,
+        "providers": providers,
+    }
+
+
 def run_setup(
     *,
     workspace: Path,
@@ -1479,10 +1597,15 @@ def run_setup(
     profile: str | None = None,
     settings: Path | None = None,
     apm_mode: str = "managed",
+    portable_hooks: bool = False,
 ) -> dict[str, Any]:
     steps: list[Step] = []
     if apm_mode not in {"managed", "prepare", "bind"}:
         raise SetupFailure("unsupported-apm-mode", "Choose managed, prepare or bind.", steps)
+    if portable_hooks and profile is None:
+        raise SetupFailure(
+            "portable-profile-required", "Portable hooks require an explicit --profile.", steps
+        )
     workspace_path = _existing_file(workspace, "--workspace")
     if settings is not None and profile is None:
         raise SetupFailure(
@@ -1556,6 +1679,8 @@ def run_setup(
             "Configured doctor did not report read readiness.",
             steps,
         )
+    if portable_hooks and apm_mode != "prepare":
+        _verify_portable_runtime(context, launcher, hook_launcher, steps)
     environment_report = _environment_launcher(
         context,
         _absolute(venv_path, "--venv"),
@@ -1563,6 +1688,7 @@ def run_setup(
         consumer=consumer_path,
         targets=() if apm_mode == "prepare" else targets,
         environment_readiness=readiness.get("environment"),
+        portable_profile=profile if portable_hooks and apm_mode != "prepare" else None,
     )
     hook_report: dict[str, object] = {"status": "disabled", "targets": []}
     lock_report: dict[str, str] = {"status": "disabled"}
@@ -1579,7 +1705,7 @@ def run_setup(
                 steps=steps,
             )
         _, installed_package = _hook_package(consumer_path, python=python)
-        _bind_package_hook(installed_package, hook_launcher)
+        _bind_package_hook(installed_package, hook_launcher, portable=portable_hooks)
         if apm_mode == "managed":
             assert apm is not None
             _run(
@@ -1594,6 +1720,7 @@ def run_setup(
             hook_launcher,
             environment=environment_report,
             python=python,
+            portable_profile=profile if portable_hooks else None,
         )
         if "copilot" in targets:
             registrations = hook_report.get("registrations")
@@ -1662,6 +1789,7 @@ def main(argv: list[str] | None = None) -> int:
             profile=args.profile,
             settings=args.settings,
             apm_mode=args.apm_mode,
+            portable_hooks=args.portable_hooks,
         )
     except SetupFailure as error:
         diagnostic = {"code": error.code, "message": str(error)}

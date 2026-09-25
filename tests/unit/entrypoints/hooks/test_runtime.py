@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 
 import pytest
+import yaml
 
 from agent_knowledge.entrypoints.hooks import runtime
 from agent_knowledge.resources.hook_messages import (
@@ -648,3 +649,210 @@ def test_claude_destination_fifo_fails_open_without_blocking(tmp_path: Path, mon
 
     assert "agent-knowledge describe" in output.getvalue()
     assert destination.is_fifo()
+
+
+def _profile_registry(home: Path, *, environment: bool = True) -> Path:
+    registry = home / ".config/agent-knowledge/config.yaml"
+    registry.parent.mkdir(parents=True, exist_ok=True)
+    profile: dict[str, object] = {"config": "missing-workspace.yaml"}
+    if environment:
+        profile["environment"] = {
+            "file": "profile.env",
+            "variables": {
+                "token": {
+                    "from_env": "PROFILE_TOKEN",
+                    "expose_as": "AGENT_TOKEN",
+                    "description": "Tool token",
+                }
+            },
+        }
+        path = registry.parent / "profile.env"
+        path.write_text(f"PROFILE_TOKEN={home.name}-secret\n", encoding="utf-8")
+        path.chmod(0o600)
+    registry.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": "knowledge-profiles.v1",
+                "default_profile": "other",
+                "profiles": {"personal": profile, "other": {"config": "other-missing.yaml"}},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return registry
+
+
+def _invoke_profile_hook(monkeypatch, *arguments: str, session_id: str = "portable") -> str:
+    monkeypatch.setattr(
+        runtime.sys,
+        "stdin",
+        type(
+            "Input",
+            (),
+            {
+                "buffer": io.BytesIO(
+                    json.dumps(
+                        {
+                            "hook_event_name": "SessionStart",
+                            "source": "resume",
+                            "session_id": session_id,
+                        }
+                    ).encode()
+                )
+            },
+        )(),
+    )
+    output = io.StringIO()
+    monkeypatch.setattr(runtime.sys, "stdout", output)
+    assert runtime.main(["--provider", "claude", "--profile", "personal", *arguments]) == 0
+    assert "agent-knowledge describe" in output.getvalue()
+    return output.getvalue()
+
+
+def test_profile_hook_resolves_runtime_home_and_pins_only_declarations(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.delenv("AGENT_KNOWLEDGE_SETTINGS", raising=False)
+    for home in (tmp_path / "first", tmp_path / "second"):
+        _profile_registry(home)
+        monkeypatch.setenv("HOME", str(home))
+        destination = home / "claude.env"
+        monkeypatch.setenv("CLAUDE_ENV_FILE", str(destination))
+        output = _invoke_profile_hook(monkeypatch)
+        assert "Profile credential activation failed" not in output
+        assert destination.read_text() == f"export AGENT_TOKEN={home.name}-secret\n"
+        state = home / ".local/state/agent-knowledge/claude-environment"
+        assert state.stat().st_mode & 0o777 == 0o700
+        pin = next(state.glob("*.json"))
+        assert pin.stat().st_mode & 0o777 == 0o600
+        assert f"{home.name}-secret" not in pin.read_text() + output
+
+
+def test_profile_resume_retains_first_declaration_after_registry_changes(
+    tmp_path: Path, monkeypatch
+) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("AGENT_KNOWLEDGE_SETTINGS", raising=False)
+    registry = _profile_registry(tmp_path)
+    destination = tmp_path / "claude.env"
+    monkeypatch.setenv("CLAUDE_ENV_FILE", str(destination))
+    _invoke_profile_hook(monkeypatch)
+    registry.write_text("malformed: [")
+    output = _invoke_profile_hook(monkeypatch)
+    assert "Profile credential activation failed" not in output
+    assert destination.read_text().splitlines() == [
+        f"export AGENT_TOKEN={tmp_path.name}-secret",
+        f"export AGENT_TOKEN={tmp_path.name}-secret",
+    ]
+    output = _invoke_profile_hook(monkeypatch, session_id="new-session")
+    assert "Profile credential activation failed" in output
+
+
+@pytest.mark.parametrize(
+    "failure",
+    ["missing-registry", "malformed-registry", "missing-env", "unsafe-env", "malformed-env"],
+)
+def test_profile_hook_activation_failures_keep_reminders(
+    tmp_path: Path, monkeypatch, failure: str
+) -> None:
+    registry = _profile_registry(tmp_path)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("AGENT_KNOWLEDGE_SETTINGS", raising=False)
+    destination = tmp_path / "claude.env"
+    monkeypatch.setenv("CLAUDE_ENV_FILE", str(destination))
+    if failure == "missing-registry":
+        registry.unlink()
+    elif failure == "malformed-registry":
+        registry.write_text("broken: [")
+    elif failure == "missing-env":
+        (registry.parent / "profile.env").unlink()
+    elif failure == "malformed-env":
+        (registry.parent / "profile.env").write_text("PROFILE_TOKEN=\n")
+    else:
+        (registry.parent / "profile.env").chmod(0o644)
+    assert "Profile credential activation failed" in _invoke_profile_hook(monkeypatch)
+    assert not destination.exists()
+
+
+def test_profile_without_environment_requires_no_native_channel(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _profile_registry(tmp_path, environment=False)
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.delenv("AGENT_KNOWLEDGE_SETTINGS", raising=False)
+    monkeypatch.delenv("CLAUDE_ENV_FILE", raising=False)
+    output = _invoke_profile_hook(monkeypatch)
+    assert "Profile credential activation failed" not in output
+    assert not (tmp_path / ".local/state/agent-knowledge/claude-environment").exists()
+
+
+def test_hook_explicit_settings_wins_over_invalid_registry_override(tmp_path: Path, monkeypatch):
+    registry = _profile_registry(tmp_path)
+    destination = tmp_path / "claude.env"
+    monkeypatch.setenv("AGENT_KNOWLEDGE_SETTINGS", "invalid-relative.yaml")
+    monkeypatch.setenv("CLAUDE_ENV_FILE", str(destination))
+    state = tmp_path / "session-state"
+    output = _invoke_profile_hook(
+        monkeypatch, "--settings", str(registry), "--environment-state-directory", str(state)
+    )
+    assert "Profile credential activation failed" not in output
+    assert destination.read_text() == f"export AGENT_TOKEN={tmp_path.name}-secret\n"
+
+
+def test_profile_resume_ignores_new_profile_declaration_and_default(tmp_path: Path, monkeypatch):
+    registry = _profile_registry(tmp_path)
+    destination = tmp_path / "claude.env"
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("AGENT_KNOWLEDGE_SETTINGS", str(registry))
+    monkeypatch.setenv("CLAUDE_ENV_FILE", str(destination))
+    _invoke_profile_hook(monkeypatch)
+    data = yaml.safe_load(registry.read_text())
+    data["default_profile"] = "personal"
+    data["profiles"]["personal"]["environment"]["variables"]["token"]["expose_as"] = "NEW_TOKEN"
+    registry.write_text(yaml.safe_dump(data))
+    _invoke_profile_hook(monkeypatch)
+    _invoke_profile_hook(monkeypatch, "--profile", "other")
+    _invoke_profile_hook(monkeypatch, session_id="fresh")
+    assert destination.read_text().splitlines() == [
+        f"export AGENT_TOKEN={tmp_path.name}-secret",
+        f"export AGENT_TOKEN={tmp_path.name}-secret",
+        f"export AGENT_TOKEN={tmp_path.name}-secret",
+        f"export NEW_TOKEN={tmp_path.name}-secret",
+    ]
+
+
+@pytest.mark.parametrize(
+    "legacy", [["--environment-file", "/unused.env"], ["--environment-map", "A=B"]]
+)
+def test_profile_hook_rejects_legacy_override_flags(tmp_path: Path, monkeypatch, legacy) -> None:
+    registry = _profile_registry(tmp_path)
+    destination = tmp_path / "claude.env"
+    monkeypatch.setenv("CLAUDE_ENV_FILE", str(destination))
+    output = _invoke_profile_hook(monkeypatch, "--settings", str(registry), *legacy)
+    assert "Profile credential activation failed" in output
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize("provider", ["codex", "copilot"])
+def test_provider_launcher_resolves_profile_from_custom_registry(
+    tmp_path: Path, monkeypatch, provider: str
+) -> None:
+    registry = _profile_registry(tmp_path)
+    monkeypatch.setenv("AGENT_KNOWLEDGE_SETTINGS", str(registry))
+    monkeypatch.setattr(runtime.shutil, "which", lambda provider, path=None: f"/bin/{provider}")
+    captured = {}
+
+    def capture_exec(executable, arguments, environment):
+        captured.update(environment)
+        raise OSError("avoid executing provider")
+
+    def capture_copilot(executable, arguments, environment, values):
+        captured.update(values)
+        return 0
+
+    monkeypatch.setattr(runtime.os, "execve", capture_exec)
+    monkeypatch.setattr(runtime, "_run_copilot", capture_copilot)
+    assert runtime.main(["--profile", "personal", "--launch-provider", provider]) == (
+        2 if provider == "codex" else 0
+    )
+    assert captured["AGENT_TOKEN"] == f"{tmp_path.name}-secret"

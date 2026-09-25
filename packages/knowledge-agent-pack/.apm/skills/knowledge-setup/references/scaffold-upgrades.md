@@ -191,6 +191,12 @@ linear history, resolve that policy mismatch before proceeding.
 
 ## Refresh installed consumers
 
+Preserve the chosen hook binding mode. Shared checkouts use
+[portable hooks](portable-hooks.md): update the runtime in each environment,
+refresh APM through its owning commands, then bind with `--portable-hooks` and
+the existing profile name. Do not replace portable commands with local absolute
+paths on upgrade. Per-environment registry and credential files remain local.
+
 A Git merge does not refresh an installed Python runtime, APM package, skills or
 hooks. After relevant updates, follow
 [`knowledge-setup`](../SKILL.md)

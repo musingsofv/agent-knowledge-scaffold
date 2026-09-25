@@ -52,9 +52,13 @@ content, and exit 3 reports incomplete external-state or runtime failure.
 
 ## Select a knowledge profile for this session
 
-The user-owned registry is `~/.config/agent-knowledge/config.yaml`. Pass global
-`--settings /absolute/registry.yaml` for another registry. There is one registry
-per invocation; no environment lookup, directory scan or registry layering.
+The user-owned registry is `~/.config/agent-knowledge/config.yaml`. Resolution
+uses explicit `--settings` first, then `AGENT_KNOWLEDGE_SETTINGS` when set, then
+the standard user path. The environment override must be a nonempty absolute
+registry path; it contains no credentials and never selects a profile by itself.
+This lets the same portable hook resolve different local paths in each execution
+environment. There is one registry per invocation, without directory scanning or
+layering. Direct `--config` remains independent of the registry and its override.
 
 ```yaml
 schema_version: knowledge-profiles.v1

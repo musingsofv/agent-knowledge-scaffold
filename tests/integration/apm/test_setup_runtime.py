@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -304,6 +305,89 @@ def test_setup_environment_target_guard_matches_the_domain_contract() -> None:
     assert module._RESERVED_ENVIRONMENT_TARGETS == profile_domain._RESERVED_ENVIRONMENT_TARGETS
     assert module._is_safe_environment_target("GH_TOKEN")
     assert profile_domain.is_safe_environment_target("GH_TOKEN")
+
+
+def _portable_setup(setup_consumer, monkeypatch):
+    """Expose this environment's installed launchers and private registry."""
+    module, args, env_file, commands = setup_consumer
+    bin_path = args["venv"] / "bin"
+    monkeypatch.setenv("PATH", str(bin_path) + os.pathsep + os.environ["PATH"])
+    monkeypatch.setenv("AGENT_KNOWLEDGE_SETTINGS", str(args["settings"]))
+    monkeypatch.setattr(
+        module.shutil,
+        "which",
+        lambda name: "/fixture/uv" if name == "uv" else str(bin_path / name),
+    )
+    _install_setup_fixture(module, args["consumer"])
+    return module, args, env_file, commands
+
+
+def test_portable_bind_keeps_hook_bytes_stable_when_credentials_become_ready(
+    setup_consumer, monkeypatch
+):
+    module, args, env_file, _ = _portable_setup(setup_consumer, monkeypatch)
+    pending = module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    paths = [
+        args["consumer"] / ".codex/apm-hooks.json",
+        args["consumer"] / ".claude/apm-hooks.json",
+        args["consumer"] / ".github/hooks/knowledge-agent-pack-knowledge-discovery.json",
+        args["consumer"] / "apm.lock.yaml",
+    ]
+    before = {path: path.read_bytes() for path in paths}
+    env_file.write_text("SOURCE_TOKEN=portable-secret-canary\n")
+    ready = module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    assert pending["hooks"]["mode"] == ready["hooks"]["mode"] == "portable"
+    assert ready["environment"]["providers"]["codex"]["command"] == (
+        "agent-knowledge-hook --profile example --launch-provider codex --"
+    )
+    for target, registration in ready["hooks"]["registrations"].items():
+        for command in registration["commands"].values():
+            assert command == f"agent-knowledge-hook --provider {target} --profile example"
+    assert before == {path: path.read_bytes() for path in paths}
+    assert all(b"portable-secret-canary" not in data for data in before.values())
+    assert ready["doctor"]["readiness"]["environment"] == "ready"
+
+
+def test_portable_bind_converts_existing_absolute_binding(setup_consumer, monkeypatch):
+    module, args, _, _ = _portable_setup(setup_consumer, monkeypatch)
+    module.run_setup(**args, apm_mode="bind")
+    report = module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    repeated = module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    assert report["hooks"] == repeated["hooks"]
+    assert str(args["venv"]) not in json.dumps(report["hooks"]["registrations"])
+    descriptor = (
+        args["consumer"]
+        / "apm_modules/_local/knowledge-agent-pack/.apm/hooks/knowledge-discovery.json"
+    ).read_text()
+    assert str(args["venv"]) not in descriptor
+
+
+@pytest.mark.parametrize("failure", ["no-profile", "wrong-path", "wrong-registry"])
+def test_portable_bind_rejects_unresolvable_runtime_before_hook_writes(
+    setup_consumer, monkeypatch, failure
+):
+    module, args, _, _ = _portable_setup(setup_consumer, monkeypatch)
+    path = args["consumer"] / ".claude/apm-hooks.json"
+    before = path.read_bytes()
+    if failure == "no-profile":
+        args = args | {"profile": None, "settings": None}
+    elif failure == "wrong-path":
+        monkeypatch.setattr(
+            module.shutil, "which", lambda name: "/fixture/uv" if name == "uv" else None
+        )
+    else:
+        monkeypatch.delenv("AGENT_KNOWLEDGE_SETTINGS")
+    with pytest.raises(module.SetupFailure) as error:
+        module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    assert (
+        error.value.code
+        == {
+            "no-profile": "portable-profile-required",
+            "wrong-path": "portable-launcher-unavailable",
+            "wrong-registry": "portable-registry-mismatch",
+        }[failure]
+    )
+    assert path.read_bytes() == before
 
 
 def test_setup_without_profile_environment_reports_each_target_without_crashing(

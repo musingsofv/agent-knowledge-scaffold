@@ -73,6 +73,18 @@ coverage described in [R8 proof](r8-harness-proof.md#staged-setup-and-pending-cr
 The existing live entries do not imply a new live model or scheduler
 run for this extension.
 
+## Shared checkouts and operating systems
+
+`--portable-hooks --profile <name>` keeps package-owned commands independent of
+machine paths. Each environment supplies its runtime on PATH and its local
+registry; setup verifies that route before binding. See
+[Portable hooks](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/portable-hooks.md).
+The Python runtime uses POSIX locking and filesystem guards. Linux containers
+hosted by Docker on Windows execute Linux code; native Windows Python is a
+separate, unsupported execution environment. A mounted host directory still
+needs filesystem checks on that actual mount. Cross-platform command generation
+does not certify filesystem semantics or native Windows support.
+
 ## Known limitations
 
 - The agent chooses queries, relevance, file ranges, graph expansion, signal

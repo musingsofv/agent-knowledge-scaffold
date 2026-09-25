@@ -23,9 +23,13 @@ from agent_knowledge.infrastructure.environment import (
     append_claude_environment,
     mapped_environment_values,
     pin_session_environment,
+    pinned_session_environment,
 )
 from agent_knowledge.infrastructure.errors import AdapterError
-from agent_knowledge.infrastructure.profiles import ResolvedProfileEnvironment
+from agent_knowledge.infrastructure.profiles import (
+    ResolvedProfileEnvironment,
+    resolve_profile_environment,
+)
 from agent_knowledge.resources.hook_messages import CREDENTIAL_ACTIVATION_FAILURE_MESSAGE
 
 _MAX_INPUT_BYTES = 1_048_576
@@ -42,6 +46,8 @@ class Parser(argparse.ArgumentParser):
 def _parser() -> Parser:
     parser = Parser(prog="agent-knowledge-hook", description="Advisory lifecycle hook.")
     parser.add_argument("--provider", choices=[provider.value for provider in HookProvider])
+    parser.add_argument("--profile", help="Exact profile name resolved when the provider starts.")
+    parser.add_argument("--settings", type=Path, help="Explicit local profile registry.")
     parser.add_argument("--environment-file", type=Path)
     parser.add_argument("--environment-state-directory", type=Path)
     parser.add_argument(
@@ -79,6 +85,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 args.environment_file,
                 args.environment_map,
                 args.provider_arguments,
+                profile=args.profile,
+                settings=args.settings,
             )
         adapted = adapt_payload(_read_payload(), provider=args.provider)
         if adapted is None:
@@ -87,19 +95,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         if (
             adapted.provider is HookProvider.CLAUDE
             and adapted.event.event is HookEventType.SESSION_START
-            and args.environment_file is not None
-            and args.environment_state_directory is not None
+            and (
+                args.profile is not None
+                or args.settings is not None
+                or (
+                    args.environment_file is not None
+                    and args.environment_state_directory is not None
+                )
+            )
         ):
             try:
-                environment = pin_session_environment(
-                    _hook_environment(args.environment_file, args.environment_map),
-                    state_directory=args.environment_state_directory,
-                    session_id=adapted.event.session_id or "",
-                )
-                destination = os.environ.get("CLAUDE_ENV_FILE")
-                if not destination:
-                    raise ValueError("Claude did not provide its environment channel.")
-                append_claude_environment(Path(destination), environment)
+                _activate_claude_environment(args, adapted.event.session_id or "")
             except (AdapterError, OSError, ValidationError, ValueError, TypeError):
                 # Credential activation is fail-closed without suppressing the
                 # advisory discovery/reflection response.
@@ -114,18 +120,60 @@ def main(argv: Sequence[str] | None = None) -> int:
     return 0
 
 
+def _validate_environment_arguments(
+    path: Path | None, mappings: Sequence[str], profile: str | None, settings: Path | None
+) -> None:
+    if settings is not None and profile is None:
+        raise ValueError("Hook --settings requires an explicit --profile.")
+    if profile is not None and (path is not None or mappings):
+        raise ValueError("Use --profile or explicit environment arguments, not both.")
+
+
+def _activate_claude_environment(args: argparse.Namespace, session_id: str) -> None:
+    _validate_environment_arguments(
+        args.environment_file, args.environment_map, args.profile, args.settings
+    )
+    state = args.environment_state_directory
+    if state is None:
+        state = Path.home() / ".local/state/agent-knowledge/claude-environment"
+    environment = None
+    if args.profile is not None:
+        if session_id:
+            environment = pinned_session_environment(state_directory=state, session_id=session_id)
+        if environment is None:
+            environment = resolve_profile_environment(args.settings, args.profile)
+    else:
+        environment = _hook_environment(args.environment_file, args.environment_map)
+    if environment is None:
+        return
+    environment = pin_session_environment(environment, state_directory=state, session_id=session_id)
+    destination = os.environ.get("CLAUDE_ENV_FILE")
+    if not destination:
+        raise ValueError("Claude did not provide its environment channel.")
+    append_claude_environment(Path(destination), environment)
+
+
 def _launch_provider(
     provider: str,
     path: Path | None,
     mappings: Sequence[str],
     arguments: Sequence[str],
+    *,
+    profile: str | None = None,
+    settings: Path | None = None,
 ) -> int:
     """Load mapped values and replace this process with one supported provider."""
-    if path is None:
+    if path is None and profile is None:
         return 2
     try:
+        _validate_environment_arguments(path, mappings, profile, settings)
         environment = dict(os.environ)
-        values = mapped_environment_values(_hook_environment(path, mappings))
+        if profile is not None:
+            selected = resolve_profile_environment(settings, profile)
+        else:
+            assert path is not None
+            selected = _hook_environment(path, mappings)
+        values = mapped_environment_values(selected) if selected is not None else ()
         for name in tuple(environment):
             if name.casefold().startswith("_ak_"):
                 environment.pop(name)
@@ -136,7 +184,7 @@ def _launch_provider(
         forwarded = list(arguments)
         if forwarded[:1] == ["--"]:
             forwarded.pop(0)
-        if provider == "copilot":
+        if provider == "copilot" and values:
             return _run_copilot(executable, forwarded, environment, values)
         environment.update(values)
         os.execve(executable, [executable, *forwarded], environment)

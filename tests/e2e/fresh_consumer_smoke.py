@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from provider_hook_smoke import run_provider_hook_smoke
+from provider_hook_smoke import _context_channels, _fixtures, run_provider_hook_smoke
 
 _PACKAGE_HOOK_SOURCE = "_local/knowledge-agent-pack"
 _DESCRIPTOR_HOOK_COMMAND = "agent-knowledge-hook"
@@ -197,6 +197,106 @@ def _provider_hook_files(consumer: Path) -> dict[str, Path]:
         "claude": consumer / ".claude" / "settings.json",
         "copilot": consumer / ".github" / "hooks" / "hand-authored.json",
     }
+
+
+def _portable_binding_proof(
+    *,
+    consumer: Path,
+    bind_args: list[str],
+    clean_env: dict[str, str],
+    profile_settings: Path,
+    runtime: Path,
+    logs: Path,
+) -> dict[str, str]:
+    """Execute identical installed hooks using two local homes, registries and runtimes."""
+    snapshot: dict[Path, bytes] | None = None
+    request = logs / "portable-doctor.json"
+    request.write_text('{"mode":"write"}\n')
+    for index in range(2):
+        home = logs.parent / f"portable-home-{index}"
+        settings = home / ".config/agent-knowledge/config.yaml"
+        settings.parent.mkdir(parents=True)
+        credential = settings.parent / "example.env"
+        canary = f"portable-environment-{index}-canary"
+        credential.write_text(f"PROFILE_PROOF_TOKEN={canary}\n")
+        credential.chmod(0o600)
+        registry = json.loads(profile_settings.read_text())
+        registry["profiles"]["example"]["environment"]["file"] = str(credential)
+        settings.write_text(json.dumps(registry))
+        venv = runtime if index == 0 else home / "runtime"
+        env = {
+            **clean_env,
+            "HOME": str(home),
+            "PATH": str(venv / "bin") + os.pathsep + clean_env["PATH"],
+        }
+        # The second environment uses explicit registry indirection as a container would.
+        if index == 1:
+            env["AGENT_KNOWLEDGE_SETTINGS"] = str(settings)
+        args = list(bind_args)
+        args[args.index("--settings") + 1] = str(settings)
+        setup = _run_json(
+            [*args, "--venv", str(venv), "--portable-hooks"],
+            cwd=consumer,
+            env=env,
+            logs=logs,
+            label=f"portable-bind-{index}",
+        )
+        paths = [
+            consumer / "apm.lock.yaml",
+            consumer / ".codex/apm-hooks.json",
+            consumer / ".claude/apm-hooks.json",
+            consumer
+            / "apm_modules/_local/knowledge-agent-pack/.apm/hooks/knowledge-discovery.json",
+            consumer / ".github/hooks/knowledge-agent-pack-knowledge-discovery.json",
+            *_provider_hook_files(consumer).values(),
+        ]
+        current = {path: path.read_bytes() for path in paths}
+        if snapshot is not None:
+            _assert(current == snapshot, "Rebinding in another environment changed shared hooks.")
+        snapshot = current
+        for provider, registration in setup["hooks"]["registrations"].items():
+            event = "sessionStart" if provider == "copilot" else "SessionStart"
+            command = registration["commands"][event]
+            _assert(
+                command == f"agent-knowledge-hook --provider {provider} --profile example",
+                "Portable hook contains machine-specific arguments.",
+            )
+            start, _, _, _ = _fixtures(provider)
+            destination = home / "claude-session.env"
+            result = subprocess.run(
+                shlex.split(command),
+                cwd=consumer,
+                env={**env, "CLAUDE_ENV_FILE": str(destination)},
+                input=json.dumps(start),
+                text=True,
+                capture_output=True,
+                timeout=10,
+            )
+            _assert(result.returncode == 0, f"Portable {provider} hook failed.")
+            value = json.loads(result.stdout)
+            _assert(len(_context_channels(value)) == 1, "Portable hook lost its context channel.")
+            _assert(canary not in result.stdout + result.stderr, "Hook exposed a credential.")
+            if provider == "claude":
+                _assert(
+                    destination.is_file() and canary in destination.read_text(),
+                    "Claude did not activate the environment-local credential.",
+                )
+                destination.unlink()
+        doctor = _run_json(
+            ["agent-knowledge", "--profile", "example", "doctor", "--request-file", str(request)],
+            cwd=consumer,
+            env=env,
+            logs=logs,
+            label=f"portable-doctor-{index}",
+        )
+        _assert(
+            all(
+                doctor["readiness"][name] == "ready"
+                for name in ("read", "write", "receipts", "environment")
+            ),
+            "Portable environment did not pass write-mode doctor.",
+        )
+    return {"status": "passed", "environments": "2", "shared_hook_bytes": "unchanged"}
 
 
 def _package_hook_groups(document: object, event: str) -> list[dict[str, Any]]:
@@ -1881,6 +1981,14 @@ def run_smoke(*, keep: bool, live_cli: bool, python_request: str) -> dict[str, A
         recovery_hook_smoke = run_provider_hook_smoke(
             consumer, recovery_hook_launcher, logs=logs, env=clean_env
         )
+        portable_proof = _portable_binding_proof(
+            consumer=consumer,
+            bind_args=bind_args,
+            clean_env=clean_env,
+            profile_settings=profile_settings,
+            runtime=Path(recovery_setup["venv"]),
+            logs=logs,
+        )
         leak_files = [
             *logs.rglob("*.log"),
             environment_launcher,
@@ -1941,6 +2049,7 @@ def run_smoke(*, keep: bool, live_cli: bool, python_request: str) -> dict[str, A
             "repeat_binding": "unchanged",
             "consumer_owned_files": "unchanged",
         },
+        "portable_binding": portable_proof,
         "hooks": hook_smoke,
         "compounding": {
             "signal_id": selected["id"],

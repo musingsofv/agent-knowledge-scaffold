@@ -4,6 +4,44 @@ R8 exercises the complete neutral retrieval and compounding contract in
 disposable consumers. It has three layers: deterministic acceptance cases,
 byte/line/latency measurements, and an opt-in provider one-shot run.
 
+## Portable bindings and filesystem proof
+
+The fresh-consumer script also binds one shared consumer twice using different
+homes, installed venvs, local registries and credential paths. It checks identical
+hook/lockfile bytes, invokes the installed PATH commands for all three provider
+startup payloads, verifies Claude receives only that environment's credential,
+and requires read/write/receipt/environment readiness from each selected profile.
+This is installed provider-fixture proof, not a new live-model run.
+
+The filesystem probe is independent of profile configuration and uses only a
+temporary child of the selected existing directory:
+
+```sh
+uv run python tests/e2e/filesystem_probe.py --directory /path/to/mounted/storage
+```
+
+It tests no-follow reads, private credential modes, actual cross-process lock
+exclusion, and concurrent receipt appends. The exclusion check uses coordinated
+processes and a nonblocking competing acquisition, not elapsed-time assumptions.
+Run it under the harness user on the actual mount; write-mode `doctor` does not
+itself establish cross-process lock exclusion.
+
+On 2026-09-25, Linux CPython 3.12 in Docker Desktop passed all five probe checks
+on container-native storage and 129 focused hook, setup, profile, environment
+and storage tests. The macOS host bind mount passed guarded reads, credential
+permissions and the receipt append sample, but **failed lock exclusion**:
+`flock(LOCK_EX | LOCK_NB)` succeeded in a second process while the first held the
+lock. A pre-existing competing-writers test independently reproduced overlapping
+critical sections. A passing append sample is therefore insufficient evidence.
+
+The portable command fix does not replace or weaken filesystem locks. Use
+Linux-backed storage for the writable knowledge state when a host mount fails
+this probe, with every writer to the same state sharing the same storage and
+lock files. A Linux-backed knowledge checkout can coexist with a host-mounted
+consumer code checkout. Do not move only the lock files to separate private
+locations, which would stop writers coordinating. Windows-hosted Docker mounts
+remain a separate user-side retest; native Windows Python is unsupported.
+
 ## Run the local acceptance and measurement layers
 
 These commands do not need a provider account or a knowledge checkout:

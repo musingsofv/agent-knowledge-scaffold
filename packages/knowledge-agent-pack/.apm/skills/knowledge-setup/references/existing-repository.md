@@ -113,8 +113,9 @@ updates the installed hook descriptor and selected provider hook projections;
 for Copilot it also reconciles the owned deployed-file hashes in `apm.lock.yaml`.
 It is not an immutable-consumer check. Missing or conflicting package resources
 fail rather than creating a private replacement hook. Run the repository's
-checks **after binding**, accounting for the verified absolute runtime command
-in owned outputs. When staging is enforced, validate the actual index contents
+checks **after binding**, accounting for the selected runtime command
+in owned outputs. For a shared host/container checkout or committable hook files,
+use [portable binding](portable-hooks.md) instead of an absolute command. When staging is enforced, validate the actual index contents
 as well as the working tree. Preserve unrelated/user-authored hooks.
 Inspect each selected harness's generated instructions for the intended profile
 and registry recommendation, with the user's session override intact. Resolve
@@ -129,7 +130,7 @@ continues to report the environment diagnostics and an overall failure; do not
 hide it by rerunning without the selected profile. Run its explicit write-mode
 probe to verify signal and receipt storage before compounding.
 
-Repeat bind to check idempotence. On later upgrades, run the repository-owned
+Repeat bind with the same binding mode to check idempotence. On later upgrades, run the repository-owned
 install/compile again, then bind and check again; installation can restore
 portable markers that need rebinding. Remove the package through the same
 repository-owned dependency workflow, preserving other skills and hooks.

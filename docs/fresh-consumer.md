@@ -116,14 +116,18 @@ on each model-facing prompt; startup and resume receive discovery plus
 reflection. Copilot has no model-visible event after in-session compaction. Its
 always-on discovery instructions remain, and the next user prompt receives the
 reflection reminder only. The package does not install a scheduler or copy a
-knowledge corpus. The setup skill replaces the marker with the absolute
-launcher from the verified Python 3.11+ virtual environment.
+knowledge corpus. By default, setup binds the absolute launcher from the verified
+Python 3.11+ virtual environment. For shared checkouts or committable hooks, use
+`--portable-hooks --profile <name>` and follow
+[Portable hooks](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/portable-hooks.md).
+That mode keeps commands path-free and resolves the profile locally at runtime.
 
 APM writes package-owned hook records under `.codex/apm-hooks.json`,
 `.claude/apm-hooks.json` and
 `.github/hooks/knowledge-agent-pack-knowledge-discovery.json`. Before setup,
 the generated provider files contain only the package marker. After setup they
-point at the absolute installed launcher reported by the setup result.
+use the verified absolute launcher or the explicitly selected portable command,
+as reported by setup.
 Re-running setup updates that one owned command in place and reconciles the
 dependency and deployment hashes for the standalone Copilot file;
 hand-authored provider hook files remain in place. To remove the package, use
@@ -132,10 +136,9 @@ the exact key from `apm deps list`: for the remote example above,
 or `apm uninstall _local/knowledge-agent-pack` for the local example. Re-enable
 it by installing the same package reference again, then rerun the same
 `knowledge-setup` flow. Reinstallation restores
-the portable package marker; setup rebinds every package-owned command to the
-absolute launcher in `.agent-knowledge-venv` and translates Copilot's prompt
-event to `userPromptTransformed`. Do not rely on an ambient `PATH` entry after
-recovery. Copilot prompt mode loads repository hooks only for an already trusted
+the package marker; rerun setup with the same binding mode and profile. Setup
+also translates Copilot's prompt event to `userPromptTransformed`. Absolute mode
+pins the venv launcher; portable mode verifies the selected runtime on `PATH`. Copilot prompt mode loads repository hooks only for an already trusted
 working folder; `-C` and `--add-dir` do not grant that trust.
 
 When a hook response includes `Provider harness (...)` and `Provider session ID
