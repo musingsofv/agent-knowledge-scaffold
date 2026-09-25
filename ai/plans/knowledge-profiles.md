@@ -25,7 +25,7 @@ hook and final-pass plans retain their existing implementation and proof history
 
 ### 1.1 Outcome
 
-A developer can use a named knowledge profile, such as `personal`, `good-bits`
+A developer can use a named knowledge profile, such as `personal`, `example-project`
 or `work`, with a configurable default, validated overrides and an optional
 external credential-environment declaration. Concurrent agent sessions keep
 their own knowledge selections. A credential environment is activated once at
@@ -148,8 +148,8 @@ profiles:
           from_env: GITHUB_V_TOKEN
           expose_as: GH_TOKEN
           description: Personal GitHub repository access
-  good-bits:
-    config: /work/good-bits/knowledge-workspace.yaml
+  example-project:
+    config: /work/example-project/knowledge-workspace.yaml
   work:
     config: /work/company/knowledge-workspace.yaml
     overrides:
@@ -160,7 +160,7 @@ profiles:
 - Required root fields: `schema_version`, `profiles`. Optional:
   `default_profile`. An empty registry with no default is valid for onboarding.
 - Profile keys are exact lowercase slugs matching `[a-z][a-z0-9-]{0,63}`.
-  `good-bits` is the usable name for the label "Good Bits"; no alias expansion,
+  `example-project` is the usable name for the label "Example Project"; no alias expansion,
   case folding, fuzzy lookup or implicit normalization at runtime.
 - Each profile requires `config` and optionally `overrides`. Reject unknown
   fields. A configured default must name an existing profile.

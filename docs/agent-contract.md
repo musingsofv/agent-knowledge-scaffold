@@ -121,7 +121,7 @@ unqualified calls. It does not affect explicit profile calls. There is no
 session-ID binding database or access-control boundary: selection is followed
 by the agent, and separate stores/sources must be configured deliberately.
 
-Names are exact lowercase slugs such as `personal`, `work` or `good-bits`.
+Names are exact lowercase slugs such as `personal`, `work` or `example-project`.
 Missing registry/default, unknown name or invalid settings fail explicitly;
 there is no first-profile fallback. `--config` bypasses the registry completely
 and cannot accompany `--profile` or `--settings`. `describe` accepts no selector;
