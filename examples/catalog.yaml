@@ -1,0 +1,57 @@
+schema_version: knowledge-catalog.v1
+scopes:
+  org:example:
+    label: Example organization
+  group:commerce:
+    label: Commerce group
+    parents: [org:example]
+  repo:orders-api:
+    label: Orders API repository
+    parents: [group:commerce]
+entities:
+  feature:order-history:
+    label: Order history
+    description: Customer access to previous orders and their current status.
+    aliases: [past orders]
+  service:orders:
+    label: Orders service
+    description: Owns order storage and the customer order-history API.
+    aliases: [orders API]
+topics:
+  product-behavior:
+    label: Product behavior
+  architecture:
+    label: Architecture
+  data-design:
+    label: Data design
+  testing:
+    label: Testing
+  reliability:
+    label: Reliability
+  performance:
+    label: Performance
+  technology-choice:
+    label: Technology choice
+  provisioning:
+    label: Provisioning
+languages:
+  typescript:
+    label: TypeScript
+technologies:
+  postgresql:
+    label: PostgreSQL
+    aliases: [Postgres]
+    technology_families: [relational-database]
+  mysql:
+    label: MySQL
+    technology_families: [relational-database]
+  netlify:
+    label: Netlify
+technology_families:
+  relational-database:
+    description: Relational database engines.
+environments:
+  dev:
+    label: Development
+  prod:
+    label: Production

@@ -1,0 +1,7 @@
+schema_version: knowledge-workspace.v1
+workspace_id: workspace:orders-api
+applicable_scopes: [org:example, group:commerce, repo:orders-api]
+sources:
+  - id: example-knowledge
+    root: knowledge
+    catalog: catalog.yaml

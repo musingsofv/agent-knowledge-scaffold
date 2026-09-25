@@ -1,0 +1,52 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agent-knowledge-scaffold"
+version = "0.1.0"
+description = "Explicit, file-backed knowledge discovery for agents."
+requires-python = ">=3.11"
+dependencies = [
+    "pyyaml==6.0.2",
+]
+
+[project.scripts]
+agent-knowledge = "agent_knowledge.entrypoints.cli.main:main"
+agent-knowledge-hook = "agent_knowledge.entrypoints.hooks.runtime:main"
+
+[dependency-groups]
+dev = [
+    "pytest==9.0.3",
+    "ruff==0.11.13",
+    "mypy==1.15.0",
+    "types-pyyaml==6.0.12.20250915",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agent_knowledge"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"docs/agent-contract.md" = "agent_knowledge/resources/agent-contract.md"
+"src/agent_knowledge/resources/reflection-reminder.txt" = "agent_knowledge/resources/reflection-reminder.txt"
+
+[tool.hatch.build.targets.sdist]
+include = ["src/agent_knowledge", "pyproject.toml", "README.md", "docs/agent-contract.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-config --strict-markers"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+include = ["src/**/*.py", "tests/**/*.py", "pyproject.toml"]
+extend-exclude = ["packages", "apm_modules"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.mypy]
+files = ["src/agent_knowledge"]
+python_version = "3.11"
+strict = true

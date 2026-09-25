@@ -1,0 +1,40 @@
+name: Knowledge Scaffold QA
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - uses: microsoft/apm-action@v1
+        with:
+          setup-only: 'true'
+          apm-version: '0.29.0'
+      - name: Install pinned dependencies
+        run: uv sync --locked
+      - name: Lint and check formatting
+        run: |
+          uv run ruff check .
+          uv run ruff format --check src tests
+      - name: Check types
+        run: uv run mypy
+      - name: Test the core and package contracts
+        run: uv run pytest -q
+      - name: Build distributions
+        run: uv build --out-dir .cache/dist
+      - name: Verify fresh APM consumption
+        run: tests/e2e/fresh-consumer-smoke --output .cache/fresh-consumer.json

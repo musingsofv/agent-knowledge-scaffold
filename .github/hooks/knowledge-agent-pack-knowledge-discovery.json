@@ -1,0 +1,27 @@
+{
+  "hooks": {
+    "sessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-knowledge-hook",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "userPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-knowledge-hook",
+            "timeout": 3
+          }
+        ]
+      }
+    ]
+  },
+  "version": 1
+}
