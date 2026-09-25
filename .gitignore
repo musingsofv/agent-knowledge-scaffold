@@ -1,0 +1,27 @@
+ai/signals/
+**/ai/usage/
+ai/signal-index/
+ai/reviews/
+ai/checkpoints/
+ai/evidence/
+packages/*/ai/signals/
+packages/*/ai/reviews/
+packages/*/ai/checkpoints/
+packages/*/ai/evidence/
+build/
+.DS_Store
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.venv/
+.agent-knowledge-venv/
+.cache/
+packages/*/.venv/
+
+# Local APM install output
+apm_modules/
+.agents/
+.claude/
+.codex/
+.cursor/
+.mcp.json

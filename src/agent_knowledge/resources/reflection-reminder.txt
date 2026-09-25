@@ -1,0 +1,6 @@
+At a natural stopping point, follow "Reflect and record useful observations" in
+the installed guide reported by `agent-knowledge describe`: review durable
+discoveries, corrections and knowledge/skill gaps from work already performed.
+If none are useful, record nothing. Before recording, list pending signals with
+the exact session_id below and inspect likely equivalents. Use the configured
+workspace and installed template. Compounding decides what becomes canonical.

@@ -1,0 +1,63 @@
+schema_version: knowledge-catalog.v1
+scopes:
+  org:example:
+    label: Example organization
+  group:commerce:
+    label: Commerce group
+  repo:orders-api:
+    label: Orders API repository
+entities:
+  feature:order-history:
+    label: Order history
+    description: Customer access to previous orders and their current status.
+    aliases: [past orders]
+  service:orders:
+    label: Orders service
+    description: Owns order storage and the customer order-history API.
+    aliases: [orders API]
+topics:
+  lead-generation:
+    label: Lead generation
+    description: Finding and qualifying potential customers before outreach.
+    aliases: [prospecting]
+  product-behavior:
+    label: Product behavior
+  architecture:
+    label: Architecture
+  performance:
+    label: Performance
+  data-design:
+    label: Data design
+  testing:
+    label: Testing
+  reliability:
+    label: Reliability
+  technology-choice:
+    label: Technology choice
+  provisioning:
+    label: Provisioning
+languages:
+  typescript:
+    label: TypeScript
+technologies:
+  postgresql:
+    label: PostgreSQL
+    aliases: [Postgres]
+    technology_families: [relational-database]
+  mysql:
+    label: MySQL
+    technology_families: [relational-database]
+  react:
+    label: React
+  netlify:
+    label: Netlify
+  cloudflare-pages:
+    label: Cloudflare Pages
+technology_families:
+  relational-database:
+    description: Relational database engines.
+environments:
+  dev:
+    label: Development
+  prod:
+    label: Production

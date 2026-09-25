@@ -1,0 +1,441 @@
+lockfile_version: '1'
+generated_at: '2026-09-25T06:44:37.547836+00:00'
+apm_version: 0.29.0
+dependencies:
+- repo_url: _local/knowledge-agent-pack
+  name: knowledge-agent-pack
+  version: 0.1.0
+  package_type: apm_package
+  deployed_files:
+  - .agents/skills/knowledge-compound
+  - .agents/skills/knowledge-compound/SKILL.md
+  - .agents/skills/knowledge-compound/references/business-decisions.md
+  - .agents/skills/knowledge-compound/references/guidance-authoring.md
+  - .agents/skills/knowledge-compound/references/owner-discovery.md
+  - .agents/skills/knowledge-setup
+  - .agents/skills/knowledge-setup/SKILL.md
+  - .agents/skills/knowledge-setup/references/business-onboarding.md
+  - .agents/skills/knowledge-setup/references/claude-scheduled.md
+  - .agents/skills/knowledge-setup/references/codex-scheduled.md
+  - .agents/skills/knowledge-setup/references/copilot-scheduled.md
+  - .agents/skills/knowledge-setup/references/existing-repository.md
+  - .agents/skills/knowledge-setup/references/profiles.md
+  - .agents/skills/knowledge-setup/references/publication.md
+  - .agents/skills/knowledge-setup/references/scaffold-upgrades.md
+  - .agents/skills/knowledge-setup/scripts/register_profile.py
+  - .agents/skills/knowledge-setup/scripts/setup_runtime.py
+  - .claude/rules/agent-knowledge-discovery.md
+  - .claude/skills/knowledge-compound
+  - .claude/skills/knowledge-compound/SKILL.md
+  - .claude/skills/knowledge-compound/references/business-decisions.md
+  - .claude/skills/knowledge-compound/references/guidance-authoring.md
+  - .claude/skills/knowledge-compound/references/owner-discovery.md
+  - .claude/skills/knowledge-setup
+  - .claude/skills/knowledge-setup/SKILL.md
+  - .claude/skills/knowledge-setup/references/business-onboarding.md
+  - .claude/skills/knowledge-setup/references/claude-scheduled.md
+  - .claude/skills/knowledge-setup/references/codex-scheduled.md
+  - .claude/skills/knowledge-setup/references/copilot-scheduled.md
+  - .claude/skills/knowledge-setup/references/existing-repository.md
+  - .claude/skills/knowledge-setup/references/profiles.md
+  - .claude/skills/knowledge-setup/references/publication.md
+  - .claude/skills/knowledge-setup/references/scaffold-upgrades.md
+  - .claude/skills/knowledge-setup/scripts/register_profile.py
+  - .claude/skills/knowledge-setup/scripts/setup_runtime.py
+  - .github/hooks/knowledge-agent-pack-knowledge-discovery.json
+  - .github/instructions/agent-knowledge-discovery.instructions.md
+  deployed_file_hashes:
+    .agents/skills/knowledge-compound/SKILL.md: sha256:20111661f02218f86d4a4ef2542ffc63af25f460012e6a983d9625eecf602ea8
+    .agents/skills/knowledge-compound/references/business-decisions.md: sha256:2a0472a3b9689ce51c644ba0f5bcc73e8620e99afc0a6d654642cab030745d56
+    .agents/skills/knowledge-compound/references/guidance-authoring.md: sha256:795100d731426dc7adb5b6715c7ceb4b12590e9aced1867b00d8ec51ae27e97f
+    .agents/skills/knowledge-compound/references/owner-discovery.md: sha256:0f3458c1a82db4adb6a8d79ba5c82193544e5506c0a7a955c7b6df947af89aad
+    .agents/skills/knowledge-setup/SKILL.md: sha256:5c7b2fe1b1a3fdf9bf2aa7525e9f16dc007af29d1cf9f18b8e605ed119a6e4ed
+    .agents/skills/knowledge-setup/references/business-onboarding.md: sha256:7704ef34b6e929ea83c3201cfb883e54995a8a1a4293632042cf816742639667
+    .agents/skills/knowledge-setup/references/claude-scheduled.md: sha256:a5296f40e8998462b99ecf675e52f63435631e5ddc5469c05e45719e27f77352
+    .agents/skills/knowledge-setup/references/codex-scheduled.md: sha256:d4f47e9649173e3eb9ed9d32a7614beae13fefca789c0d735650cef81c3d9b03
+    .agents/skills/knowledge-setup/references/copilot-scheduled.md: sha256:5e0ab618637ac10e77df9a2f61961b2b09c0e2c7267eeeac3e5c14d8c7afe079
+    .agents/skills/knowledge-setup/references/existing-repository.md: sha256:645ae3fb7af2ce42e58ae55322a81667c5521b808c9c123640bfc6d3aedbda6c
+    .agents/skills/knowledge-setup/references/profiles.md: sha256:57f5aa276d8f4ac3590fe0b4d01aacf62beb5b04aea474ba006003e034c06dc9
+    .agents/skills/knowledge-setup/references/publication.md: sha256:bbcf817bf6b11503c8c8858f61e02c02e98b41345b3f0a73cbfb8a4cc93c9c48
+    .agents/skills/knowledge-setup/references/scaffold-upgrades.md: sha256:e0ec04b49e3a3b7c9ddc08cbd56ea5e1323df0005b866055ebc1bcb304499c9e
+    .agents/skills/knowledge-setup/scripts/register_profile.py: sha256:2dd4296fa048d740933c8a8923c0fb28beaa6fbf8a029f3431c674fd4a9abd98
+    .agents/skills/knowledge-setup/scripts/setup_runtime.py: sha256:b95b9b7b1088f07c4c53bb1102c26f0f5acb8e6ffe2aa1697be2897d509ae0e3
+    .claude/rules/agent-knowledge-discovery.md: sha256:6011494dcda0af9b3a8eef1684232a195ff5dbb54ff01f73d38e88843a292b4b
+    .claude/skills/knowledge-compound/SKILL.md: sha256:20111661f02218f86d4a4ef2542ffc63af25f460012e6a983d9625eecf602ea8
+    .claude/skills/knowledge-compound/references/business-decisions.md: sha256:2a0472a3b9689ce51c644ba0f5bcc73e8620e99afc0a6d654642cab030745d56
+    .claude/skills/knowledge-compound/references/guidance-authoring.md: sha256:795100d731426dc7adb5b6715c7ceb4b12590e9aced1867b00d8ec51ae27e97f
+    .claude/skills/knowledge-compound/references/owner-discovery.md: sha256:0f3458c1a82db4adb6a8d79ba5c82193544e5506c0a7a955c7b6df947af89aad
+    .claude/skills/knowledge-setup/SKILL.md: sha256:5c7b2fe1b1a3fdf9bf2aa7525e9f16dc007af29d1cf9f18b8e605ed119a6e4ed
+    .claude/skills/knowledge-setup/references/business-onboarding.md: sha256:7704ef34b6e929ea83c3201cfb883e54995a8a1a4293632042cf816742639667
+    .claude/skills/knowledge-setup/references/claude-scheduled.md: sha256:a5296f40e8998462b99ecf675e52f63435631e5ddc5469c05e45719e27f77352
+    .claude/skills/knowledge-setup/references/codex-scheduled.md: sha256:d4f47e9649173e3eb9ed9d32a7614beae13fefca789c0d735650cef81c3d9b03
+    .claude/skills/knowledge-setup/references/copilot-scheduled.md: sha256:5e0ab618637ac10e77df9a2f61961b2b09c0e2c7267eeeac3e5c14d8c7afe079
+    .claude/skills/knowledge-setup/references/existing-repository.md: sha256:645ae3fb7af2ce42e58ae55322a81667c5521b808c9c123640bfc6d3aedbda6c
+    .claude/skills/knowledge-setup/references/profiles.md: sha256:57f5aa276d8f4ac3590fe0b4d01aacf62beb5b04aea474ba006003e034c06dc9
+    .claude/skills/knowledge-setup/references/publication.md: sha256:bbcf817bf6b11503c8c8858f61e02c02e98b41345b3f0a73cbfb8a4cc93c9c48
+    .claude/skills/knowledge-setup/references/scaffold-upgrades.md: sha256:e0ec04b49e3a3b7c9ddc08cbd56ea5e1323df0005b866055ebc1bcb304499c9e
+    .claude/skills/knowledge-setup/scripts/register_profile.py: sha256:2dd4296fa048d740933c8a8923c0fb28beaa6fbf8a029f3431c674fd4a9abd98
+    .claude/skills/knowledge-setup/scripts/setup_runtime.py: sha256:b95b9b7b1088f07c4c53bb1102c26f0f5acb8e6ffe2aa1697be2897d509ae0e3
+    .github/hooks/knowledge-agent-pack-knowledge-discovery.json: sha256:40cfc466cb0137e8005133050d1328017c25f48996fbdf33dc8ec823f5b8c9be
+    .github/instructions/agent-knowledge-discovery.instructions.md: sha256:792c357f2d8b2cb43d9c3b851839f323878a59f3a664a2ee6822146fe1db10ce
+  source: local
+  local_path: ./packages/knowledge-agent-pack
+  declared_license: 0BSD
+deployments:
+- kind: project-relative
+  target: claude
+  value: .claude/rules/agent-knowledge-discovery.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:6011494dcda0af9b3a8eef1684232a195ff5dbb54ff01f73d38e88843a292b4b
+- kind: project-relative
+  target: claude
+  value: .claude/rules/scaffold-local.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:a1f8ce5766ad57f5b52befde4882b22dab065d2b2043aaa543dd920710030f5f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-compound
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-compound/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:20111661f02218f86d4a4ef2542ffc63af25f460012e6a983d9625eecf602ea8
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-compound/references/business-decisions.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:2a0472a3b9689ce51c644ba0f5bcc73e8620e99afc0a6d654642cab030745d56
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-compound/references/guidance-authoring.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:795100d731426dc7adb5b6715c7ceb4b12590e9aced1867b00d8ec51ae27e97f
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-compound/references/owner-discovery.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:0f3458c1a82db4adb6a8d79ba5c82193544e5506c0a7a955c7b6df947af89aad
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: null
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:5c7b2fe1b1a3fdf9bf2aa7525e9f16dc007af29d1cf9f18b8e605ed119a6e4ed
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/references/business-onboarding.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:7704ef34b6e929ea83c3201cfb883e54995a8a1a4293632042cf816742639667
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/references/claude-scheduled.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:a5296f40e8998462b99ecf675e52f63435631e5ddc5469c05e45719e27f77352
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/references/codex-scheduled.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:d4f47e9649173e3eb9ed9d32a7614beae13fefca789c0d735650cef81c3d9b03
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/references/copilot-scheduled.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:5e0ab618637ac10e77df9a2f61961b2b09c0e2c7267eeeac3e5c14d8c7afe079
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/references/existing-repository.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:645ae3fb7af2ce42e58ae55322a81667c5521b808c9c123640bfc6d3aedbda6c
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/references/profiles.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:57f5aa276d8f4ac3590fe0b4d01aacf62beb5b04aea474ba006003e034c06dc9
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/references/publication.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:bbcf817bf6b11503c8c8858f61e02c02e98b41345b3f0a73cbfb8a4cc93c9c48
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/references/scaffold-upgrades.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:e0ec04b49e3a3b7c9ddc08cbd56ea5e1323df0005b866055ebc1bcb304499c9e
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/scripts/register_profile.py
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:2dd4296fa048d740933c8a8923c0fb28beaa6fbf8a029f3431c674fd4a9abd98
+- kind: project-relative
+  target: claude
+  value: .claude/skills/knowledge-setup/scripts/setup_runtime.py
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:b95b9b7b1088f07c4c53bb1102c26f0f5acb8e6ffe2aa1697be2897d509ae0e3
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-compound
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-compound/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:20111661f02218f86d4a4ef2542ffc63af25f460012e6a983d9625eecf602ea8
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-compound/references/business-decisions.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:2a0472a3b9689ce51c644ba0f5bcc73e8620e99afc0a6d654642cab030745d56
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-compound/references/guidance-authoring.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:795100d731426dc7adb5b6715c7ceb4b12590e9aced1867b00d8ec51ae27e97f
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-compound/references/owner-discovery.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:0f3458c1a82db4adb6a8d79ba5c82193544e5506c0a7a955c7b6df947af89aad
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: null
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:5c7b2fe1b1a3fdf9bf2aa7525e9f16dc007af29d1cf9f18b8e605ed119a6e4ed
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/references/business-onboarding.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:7704ef34b6e929ea83c3201cfb883e54995a8a1a4293632042cf816742639667
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/references/claude-scheduled.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:a5296f40e8998462b99ecf675e52f63435631e5ddc5469c05e45719e27f77352
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/references/codex-scheduled.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:d4f47e9649173e3eb9ed9d32a7614beae13fefca789c0d735650cef81c3d9b03
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/references/copilot-scheduled.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:5e0ab618637ac10e77df9a2f61961b2b09c0e2c7267eeeac3e5c14d8c7afe079
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/references/existing-repository.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:645ae3fb7af2ce42e58ae55322a81667c5521b808c9c123640bfc6d3aedbda6c
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/references/profiles.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:57f5aa276d8f4ac3590fe0b4d01aacf62beb5b04aea474ba006003e034c06dc9
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/references/publication.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:bbcf817bf6b11503c8c8858f61e02c02e98b41345b3f0a73cbfb8a4cc93c9c48
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/references/scaffold-upgrades.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:e0ec04b49e3a3b7c9ddc08cbd56ea5e1323df0005b866055ebc1bcb304499c9e
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/scripts/register_profile.py
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:2dd4296fa048d740933c8a8923c0fb28beaa6fbf8a029f3431c674fd4a9abd98
+- kind: project-relative
+  target: codex
+  value: .agents/skills/knowledge-setup/scripts/setup_runtime.py
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:b95b9b7b1088f07c4c53bb1102c26f0f5acb8e6ffe2aa1697be2897d509ae0e3
+- kind: project-relative
+  target: copilot
+  value: .github/hooks/knowledge-agent-pack-knowledge-discovery.json
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:40cfc466cb0137e8005133050d1328017c25f48996fbdf33dc8ec823f5b8c9be
+- kind: project-relative
+  target: copilot
+  value: .github/instructions/agent-knowledge-discovery.instructions.md
+  runtime: null
+  scope: project
+  owners:
+  - ./packages/knowledge-agent-pack
+  active_owner: ./packages/knowledge-agent-pack
+  content_hash: sha256:792c357f2d8b2cb43d9c3b851839f323878a59f3a664a2ee6822146fe1db10ce
+- kind: project-relative
+  target: copilot
+  value: .github/instructions/scaffold-local.instructions.md
+  runtime: null
+  scope: project
+  owners:
+  - .
+  active_owner: .
+  content_hash: sha256:a958e53cbf2ee62db35b57a0bf73d2fc4bb181d2d15ceb5711c6a8fedf592369
+local_deployed_files:
+- .claude/rules/scaffold-local.md
+- .github/instructions/scaffold-local.instructions.md
+local_deployed_file_hashes:
+  .claude/rules/scaffold-local.md: sha256:a1f8ce5766ad57f5b52befde4882b22dab065d2b2043aaa543dd920710030f5f
+  .github/instructions/scaffold-local.instructions.md: sha256:a958e53cbf2ee62db35b57a0bf73d2fc4bb181d2d15ceb5711c6a8fedf592369

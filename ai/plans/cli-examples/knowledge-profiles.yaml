@@ -1,0 +1,10 @@
+schema_version: knowledge-profiles.v1
+default_profile: commerce
+profiles:
+  commerce:
+    config: ./orders-api/knowledge-workspace.yaml
+  commerce-review:
+    config: ./orders-api/knowledge-workspace.yaml
+    overrides:
+      receipts:
+        enabled: false

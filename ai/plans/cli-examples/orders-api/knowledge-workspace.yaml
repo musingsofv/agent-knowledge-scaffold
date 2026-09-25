@@ -1,0 +1,14 @@
+schema_version: knowledge-workspace.v1
+workspace_id: repo:orders-api
+applicable_scopes: [org:example, group:commerce, repo:orders-api]
+sources:
+  - id: commerce-knowledge
+    root: ../commerce-knowledge/knowledge
+    catalog: ../commerce-knowledge/catalog.yaml
+    publication:
+      repository: example/commerce-knowledge
+      base_branch: main
+      branch_prefix: knowledge/
+signal_storage:
+  scaffold_root: ../commerce-knowledge
+  code_root: ..
