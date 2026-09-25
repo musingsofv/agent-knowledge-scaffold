@@ -80,16 +80,30 @@ checkout's `src/` or `docs/` directories.
 
 ## Install and compile the APM package
 
-For a fresh consumer that permits helper-owned APM installation, use the
-explicit local package source below. The setup binder currently locates
-`apm_modules/_local/knowledge-agent-pack`; arbitrary marketplace/registry
-installation layouts are not covered by this binding contract:
+For a fresh consumer that permits helper-owned APM installation, use a portable
+remote reference when the manifest will be shared across machines:
+
+```bash
+apm install --target codex,claude,copilot --no-policy \
+  musingsofv/agent-knowledge-scaffold/packages/knowledge-agent-pack#main
+apm compile --target codex,claude,copilot --force-instructions
+```
+
+Use an approved tag/commit or organization mirror when appropriate. During
+local development, an explicit source path works too:
 
 ```bash
 apm install --target codex,claude,copilot --no-policy \
   /path/to/agent-knowledge-scaffold/packages/knowledge-agent-pack
 apm compile --target codex,claude,copilot --force-instructions
 ```
+
+Setup uses `apm.lock.yaml` to find one installed hook bundle under `apm_modules`,
+whether it is local, remote or a remote subdirectory package. It preserves
+APM's ownership identity and skips source copies that are not installed
+dependencies. Missing lock records or multiple installed discovery bundles
+require repairing the APM installation before binding; do not copy packages
+into `_local` or rewrite a portable manifest to bypass the check.
 
 The package owns one discovery instruction and one advisory discovery hook.
 Compilation projects the instruction to the selected harnesses (`AGENTS.md`,
@@ -113,9 +127,11 @@ point at the absolute installed launcher reported by the setup result.
 Re-running setup updates that one owned command in place and reconciles the
 dependency and deployment hashes for the standalone Copilot file;
 hand-authored provider hook files remain in place. To remove the package, use
-the exact key from `apm deps list`, normally `apm uninstall
-_local/knowledge-agent-pack`; re-enable it by installing the package source
-path again, then rerun the same `knowledge-setup` flow. Reinstallation restores
+the exact key from `apm deps list`: for the remote example above,
+`apm uninstall musingsofv/agent-knowledge-scaffold/packages/knowledge-agent-pack`,
+or `apm uninstall _local/knowledge-agent-pack` for the local example. Re-enable
+it by installing the same package reference again, then rerun the same
+`knowledge-setup` flow. Reinstallation restores
 the portable package marker; setup rebinds every package-owned command to the
 absolute launcher in `.agent-knowledge-venv` and translates Copilot's prompt
 event to `userPromptTransformed`. Do not rely on an ambient `PATH` entry after

@@ -184,9 +184,13 @@ Resolve the setup script from this skill's own directory. Choose one mode:
 For existing repositories, follow the integration reference's
 `prepare -> repository-owned install/compile -> bind -> repository checks`
 sequence. Bind updates package-owned hook resources and Copilot lock hashes;
-it does not certify the consumer's instruction compilation. The supported
-installed dependency location is `apm_modules/_local/knowledge-agent-pack`.
-Do not claim that a different package registry layout has been integrated.
+it does not certify the consumer's instruction compilation. Local and remote
+APM package references are supported, including remote subdirectory packages.
+The helper discovers the unique installed hook bundle through `apm.lock.yaml`,
+preserving APM's dependency identity and installation path. Keep portable
+remote references in shared manifests; do not replace them with machine-local
+paths to make binding work. Missing or ambiguous installed bundles need a
+repository-owned APM install/repair before retrying bind.
 
 Run with absolute paths and the selected targets:
 

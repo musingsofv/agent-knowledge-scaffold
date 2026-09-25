@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 from agent_knowledge.domain import profiles as profile_domain
 from tests.factories import catalog_data
@@ -34,10 +35,30 @@ def _setup_module():
     return module
 
 
-def _package_root(consumer: Path) -> Path:
-    hooks = consumer / "apm_modules" / "_local" / "knowledge-agent-pack" / ".apm" / "hooks"
+def _package_root(
+    consumer: Path,
+    source: str = "_local/knowledge-agent-pack",
+    *,
+    dependency: dict[str, object] | None = None,
+) -> Path:
+    hooks = consumer / "apm_modules" / source / ".apm" / "hooks"
     hooks.mkdir(parents=True)
     (hooks / "knowledge-discovery.json").write_text("{}\n", encoding="utf-8")
+    if dependency is None:
+        dependency = {"repo_url": source, "name": Path(source).name}
+        if source.startswith("_local/"):
+            dependency.update(source="local", local_path=f"./packages/{Path(source).name}")
+        elif "/packages/" in source:
+            repo, package = source.split("/packages/", 1)
+            dependency.update(repo_url=repo, is_virtual=True, virtual_path=f"packages/{package}")
+    lock = consumer / "apm.lock.yaml"
+    document = (
+        yaml.safe_load(lock.read_text())
+        if lock.exists()
+        else {"lockfile_version": "1", "dependencies": []}
+    )
+    document["dependencies"].append(dependency)
+    lock.write_text(yaml.safe_dump(document, sort_keys=False))
     return hooks.parent.parent
 
 
@@ -125,19 +146,26 @@ def setup_consumer(tmp_path: Path, monkeypatch):
     return module, args, env_file, commands
 
 
-def _install_setup_fixture(module, consumer: Path) -> None:
-    package = _package_root(consumer)
+def _install_setup_fixture(
+    module, consumer: Path, source: str = "_local/knowledge-agent-pack"
+) -> None:
+    package = _package_root(consumer, source)
     descriptor = ROOT / "packages/knowledge-agent-pack/.apm/hooks/knowledge-discovery.json"
     (package / ".apm/hooks/knowledge-discovery.json").write_bytes(descriptor.read_bytes())
-    _write_registration_files(consumer, module._DESCRIPTOR_HOOK_COMMAND)
-    (consumer / "apm.lock.yaml").write_text(
-        "lockfile_version: '1'\ndependencies:\n- repo_url: _local/knowledge-agent-pack\n"
-        "  deployed_file_hashes:\n"
-        "    .github/hooks/knowledge-agent-pack-knowledge-discovery.json: sha256:stale\n"
-        "deployments:\n- kind: project-relative\n  target: copilot\n"
-        "  value: .github/hooks/knowledge-agent-pack-knowledge-discovery.json\n"
-        "  content_hash: sha256:stale\n"
-    )
+    _write_registration_files(consumer, module._DESCRIPTOR_HOOK_COMMAND, source=source)
+    lock = consumer / "apm.lock.yaml"
+    document = yaml.safe_load(lock.read_text())
+    path = ".github/hooks/knowledge-agent-pack-knowledge-discovery.json"
+    document["dependencies"][0]["deployed_file_hashes"] = {path: "sha256:stale"}
+    document["deployments"] = [
+        {
+            "kind": "project-relative",
+            "target": "copilot",
+            "value": path,
+            "content_hash": "sha256:stale",
+        }
+    ]
+    lock.write_text(yaml.safe_dump(document, sort_keys=False))
 
 
 def test_prepare_keeps_targets_and_consumer_unchanged_with_blank_credentials(setup_consumer):
@@ -252,11 +280,11 @@ def test_pending_environment_does_not_hide_broken_receipt_storage(setup_consumer
     assert (args["consumer"] / ".claude/apm-hooks.json").read_bytes() == before
 
 
-def test_bind_requires_installed_package(setup_consumer):
+def test_bind_requires_installed_package_lockfile(setup_consumer):
     module, args, _, _ = setup_consumer
     with pytest.raises(module.SetupFailure) as error:
         module.run_setup(**args, apm_mode="bind")
-    assert error.value.code == "hook-package-missing"
+    assert error.value.code == "lockfile-missing"
 
 
 @pytest.mark.parametrize(
@@ -392,8 +420,9 @@ def test_setup_rejects_environment_too_large_for_claude_session_state(
     assert error.value.code == "environment-contract-invalid"
 
 
-def _write_registration_files(consumer: Path, command: str) -> dict[str, bytes]:
-    source = "_local/knowledge-agent-pack"
+def _write_registration_files(
+    consumer: Path, command: str, *, source: str = "_local/knowledge-agent-pack"
+) -> dict[str, bytes]:
     codex = consumer / ".codex" / "apm-hooks.json"
     claude = consumer / ".claude" / "apm-hooks.json"
     copilot = consumer / ".github" / "hooks" / "knowledge-agent-pack-knowledge-discovery.json"
@@ -957,14 +986,133 @@ def test_missing_supported_python_reports_install_remediation(tmp_path: Path) ->
     assert "uv python install 3.11" in str(error.value)
 
 
-def test_package_discovery_rejects_ambiguous_hook_bundles(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "source",
+    [
+        "_local/knowledge-agent-pack",
+        "example/knowledge-agent-pack",
+        "example/agent-knowledge-scaffold/packages/knowledge-agent-pack",
+    ],
+)
+def test_bind_supports_local_and_remote_installed_packages(setup_consumer, source: str) -> None:
+    module, args, _, commands = setup_consumer
+    consumer = args["consumer"]
+    _install_setup_fixture(module, consumer, source)
+    manifest = consumer / "apm.yml"
+    manifest.write_text(f"dependencies:\n  apm:\n    - {source}#main\n")
+    before = manifest.read_bytes()
+
+    first = module.run_setup(**args, apm_mode="bind")
+    assert first["hooks"]["status"] == "ready"
+    assert {item["source"] for item in first["hooks"]["registrations"].values()} == {source}
+    assert first["apm_lock"]["status"] == "updated"
+    repeated = module.run_setup(**args, apm_mode="bind")
+    assert repeated["hooks"] == first["hooks"]
+    assert repeated["apm_lock"]["status"] == "current"
+    assert manifest.read_bytes() == before
+    assert not any("apm" in command[0] for command in commands)
+
+
+def test_discovery_ignores_uninstalled_source_copies(tmp_path: Path) -> None:
+    module = _setup_module()
+    installed = _package_root(tmp_path)
+    source = tmp_path / "apm_modules/example/scaffold/packages/knowledge-agent-pack/.apm/hooks"
+    source.mkdir(parents=True)
+    (source / "knowledge-discovery.json").write_text("{}\n")
+
+    assert module._hook_package(tmp_path) == ("_local/knowledge-agent-pack", installed)
+
+
+def test_remote_materialization_case_preserves_canonical_ownership(tmp_path: Path) -> None:
+    module = _setup_module()
+    canonical = "example/scaffold/packages/knowledge-agent-pack"
+    installed = _package_root(
+        tmp_path,
+        "Example/Scaffold/packages/knowledge-agent-pack",
+        dependency={
+            "repo_url": "example/scaffold",
+            "materialization_repo_url": "Example/Scaffold",
+            "is_virtual": True,
+            "virtual_path": "packages/knowledge-agent-pack",
+        },
+    )
+    _write_registration_files(tmp_path, module._DESCRIPTOR_HOOK_COMMAND, source=canonical)
+    report = module._configure_hook_registrations(tmp_path, ("codex",), tmp_path / "hook")
+
+    assert module._hook_package(tmp_path) == (canonical, installed)
+    assert report["registrations"]["codex"]["source"] == canonical
+
+
+def test_discovery_finds_registered_transitive_local_package(tmp_path: Path) -> None:
+    module = _setup_module()
+    anchor = "example/scaffold/packages/knowledge-agent-pack"
+    source = (
+        f"_local/{module.hashlib.sha256(anchor.encode()).hexdigest()[:12]}/knowledge-agent-pack"
+    )
+    installed = _package_root(
+        tmp_path,
+        source,
+        dependency={
+            "repo_url": "_local/knowledge-agent-pack",
+            "source": "local",
+            "local_path": "./packages/knowledge-agent-pack",
+            "declaring_parent": "example/scaffold",
+            "anchored_local_path": anchor,
+        },
+    )
+
+    assert module._hook_package(tmp_path) == (source, installed)
+
+
+@pytest.mark.parametrize("transitive", [False, True])
+def test_discovery_handles_wrapped_yaml_paths_without_loading_consumer_modules(
+    tmp_path: Path, transitive: bool
+) -> None:
+    module = _setup_module()
+    local = (
+        "/Users/example/Documents/Engineering Projects/Business Operations/Shared Development/"
+        "agent-knowledge-scaffold/packages/knowledge-agent-pack"
+    )
+    dependency = {
+        "repo_url": "_local/knowledge-agent-pack",
+        "source": "local",
+        "local_path": local,
+    }
+    source = "_local/knowledge-agent-pack"
+    if transitive:
+        dependency.update(declaring_parent="example/scaffold", anchored_local_path=local)
+        digest = module.hashlib.sha256(local.encode()).hexdigest()[:12]
+        source = f"_local/{digest}/knowledge-agent-pack"
+    installed = _package_root(tmp_path, source, dependency=dependency)
+    assert local not in (tmp_path / "apm.lock.yaml").read_text()
+    (tmp_path / "yaml.py").write_text("raise RuntimeError('Do not import consumer code')\n")
+
+    assert module._hook_package(tmp_path) == (source, installed)
+
+
+def test_discovery_rejects_malformed_lock_yaml(tmp_path: Path) -> None:
+    module = _setup_module()
+    (tmp_path / "apm.lock.yaml").write_text("dependencies: [\n")
+    with pytest.raises(module.SetupFailure) as error:
+        module._hook_package(tmp_path)
+    assert error.value.code == "lockfile-invalid"
+
+
+def test_discovery_rejects_lock_paths_outside_modules(tmp_path: Path) -> None:
+    module = _setup_module()
+    _package_root(tmp_path, dependency={"repo_url": "../../outside"})
+    with pytest.raises(module.SetupFailure) as error:
+        module._hook_package(tmp_path)
+    assert error.value.code == "hook-package-invalid"
+
+
+@pytest.mark.parametrize("source", ["_local/another-pack", "example/knowledge-agent-pack"])
+def test_package_discovery_rejects_ambiguous_hook_bundles(tmp_path: Path, source: str) -> None:
     module = _setup_module()
     consumer = tmp_path / "consumer"
     consumer.mkdir()
     _package_root(consumer)
-    second = consumer / "apm_modules" / "_local" / "another-pack" / ".apm" / "hooks"
-    second.mkdir(parents=True)
-    (second / "knowledge-discovery.json").write_text("{}\n", encoding="utf-8")
+    _package_root(consumer, source)
 
     with pytest.raises(module.SetupFailure, match="no unique package-owned") as error:
         module._hook_package(consumer)

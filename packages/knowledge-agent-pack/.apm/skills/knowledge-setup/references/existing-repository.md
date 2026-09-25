@@ -3,9 +3,12 @@
 Use this procedure when a consumer already owns its APM installation,
 compilation, generated files or native skill catalog. Keep the repository's
 commands authoritative and use the scaffold's hook implementation unchanged.
-The helper supports the local installed dependency at
-`apm_modules/_local/knowledge-agent-pack`; another registry layout is not a
-supported binding target.
+The helper supports local and remote APM package references, including remote
+subdirectory packages. It uses `apm.lock.yaml` to locate the unique installed
+discovery hook bundle under `apm_modules`, preserving APM's canonical ownership
+marker and materialized path. Source copies inside other dependencies are not
+installed bundles. Bind requires the generated lock even for a single target;
+it does not run `apm deps list` or require an APM executable.
 
 ## Discover the consumer contract
 
@@ -22,6 +25,11 @@ Keep the authored package and runtime distribution aligned. The `--package`
 argument installs Python from a checkout or wheel; it does not register the APM
 package in the consumer. Use the package's authored sources as the integration
 inputs rather than copying hook logic or maintaining a second discovery policy.
+For a shared manifest, prefer a portable reference such as
+`musingsofv/agent-knowledge-scaffold/packages/knowledge-agent-pack#main` or the
+organization's approved mirror/tag/commit. A local source path is also supported
+for development. Do not switch a remote dependency to an absolute local path
+as a binding workaround.
 
 ## Prepare without changing consumer configuration
 

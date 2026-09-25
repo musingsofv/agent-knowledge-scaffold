@@ -71,6 +71,23 @@ compounding concurrency test now requires the losing caller to receive
 `compound-active`; it no longer accepts a lock-acquisition failure. Ruff,
 formatting and mypy checks passed.
 
+Remote APM binding was verified on 2026-09-25 against a real APM 0.29.0 install
+of `musingsofv/agent-knowledge-scaffold/packages/knowledge-agent-pack#main` in
+a disposable consumer. The updated setup helper bound Codex, Claude and
+Copilot, preserved the portable manifest, reconciled Copilot hashes and remained
+unchanged on repeat bind. Installed provider fixtures passed for all three;
+APM uninstall removed the package hooks while preserving unrelated hooks.
+This is installation and provider-fixture proof, not a new live-model run.
+
+The full suite passed 1,399 tests after the remote-binding fix. Regression
+coverage includes remote standalone/subdirectory packages, canonical versus
+materialized repository casing, transitive local packages, ignored source
+copies, ambiguous bundles, malformed/escaping lock records, and wrapped YAML
+paths containing spaces. Dependency YAML is parsed by the verified runtime,
+so the bootstrap interpreter needs no additional packages. The existing local
+fresh-consumer proof also passed on Python 3.13, including prepare/bind,
+reinstallation and all three provider fixtures. Build, Ruff and mypy passed.
+
 For a prepared consumer, the provider-only fixture driver is:
 
 ```bash

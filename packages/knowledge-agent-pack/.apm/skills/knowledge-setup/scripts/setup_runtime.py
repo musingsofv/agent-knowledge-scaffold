@@ -307,7 +307,8 @@ def _read_python_version(python: Path, steps: list[Step]) -> tuple[int, int, int
     if result.returncode:
         raise SetupFailure(
             "python-unavailable",
-            "Python 3.11 or newer is required, but the selected interpreter failed its version check. "
+            "Python 3.11 or newer is required, but the selected interpreter failed "
+            "its version check. "
             "Install Python 3.11 or newer and retry setup.",
             steps,
         )
@@ -316,7 +317,8 @@ def _read_python_version(python: Path, steps: list[Step]) -> tuple[int, int, int
     if not separator:
         raise SetupFailure(
             "python-version-unknown",
-            "The selected interpreter did not report a Python version. Install Python 3.11 or newer "
+            "The selected interpreter did not report a Python version. "
+            "Install Python 3.11 or newer "
             "and retry setup.",
             steps,
         )
@@ -369,7 +371,8 @@ def _find_supported_python(uv: str, steps: list[Step]) -> Path:
     except (OSError, subprocess.TimeoutExpired) as error:
         raise SetupFailure(
             "python-version-unavailable",
-            "Python 3.11 or newer is required and could not be located. Install Python 3.11 or newer "
+            "Python 3.11 or newer is required and could not be located. "
+            "Install Python 3.11 or newer "
             "(for example, with `uv python install 3.11`) and retry setup.",
             steps,
         ) from error
@@ -572,26 +575,82 @@ def _json_result(
     return value
 
 
-def _hook_package(consumer: Path) -> tuple[str, Path]:
-    """Find the installed package that owns the discovery hook bundle."""
-    local_root = consumer / "apm_modules" / "_local"
-    candidates = (
-        sorted(
-            path
-            for path in local_root.iterdir()
-            if path.is_dir() and (path / ".apm" / "hooks" / "knowledge-discovery.json").is_file()
+def _hook_package(consumer: Path, *, python: Path = Path(sys.executable)) -> tuple[str, Path]:
+    """Find the unique lock-registered package that owns the discovery hook bundle."""
+    modules = consumer / "apm_modules"
+    lock = consumer / "apm.lock.yaml"
+    if not lock.is_file():
+        raise SetupFailure(
+            "lockfile-missing", "Rerun APM install to create apm.lock.yaml before binding.", []
         )
-        if local_root.is_dir()
-        else []
-    )
+    # Use the verified runtime's YAML parser: the bootstrap interpreter need
+    # not have PyYAML, and APM can wrap/quote paths in its generated lock.
+    try:
+        document = _json_result(
+            [
+                str(python),
+                "-I",
+                "-c",
+                "import json, pathlib, sys, yaml; "
+                "data = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8')); "
+                "print(json.dumps({'status': 'ok', 'dependencies': data['dependencies']}))",
+                str(lock),
+            ],
+            cwd=consumer,
+            name="apm-lock-read",
+            steps=[],
+        )
+    except SetupFailure as error:
+        raise SetupFailure(
+            "lockfile-invalid",
+            "Cannot read APM dependencies; rerun APM install before binding.",
+            [],
+        ) from error
+    dependencies = document.get("dependencies")
+    if not isinstance(dependencies, list) or not all(
+        isinstance(item, dict) for item in dependencies
+    ):
+        raise SetupFailure("lockfile-invalid", "APM dependencies must be a list of records.", [])
+    candidates: list[tuple[str, Path]] = []
+    for dependency in dependencies:
+        repo = dependency.get("repo_url")
+        if not isinstance(repo, str) or not repo:
+            continue
+        if dependency.get("source") == "local":
+            local = dependency.get("local_path")
+            if not isinstance(local, str) or not local:
+                continue
+            name = Path(local).name
+            if dependency.get("declaring_parent"):
+                anchor = dependency.get("anchored_local_path") or local
+                if not isinstance(anchor, str):
+                    continue
+                name = f"{hashlib.sha256(anchor.encode()).hexdigest()[:12]}/{name}"
+            source = f"_local/{name}"
+            relative = source
+        else:
+            virtual = dependency.get("virtual_path") if dependency.get("is_virtual") else ""
+            materialized = dependency.get("materialization_repo_url") or repo
+            if not isinstance(virtual, str) or not isinstance(materialized, str):
+                continue
+            source = f"{repo}/{virtual}" if virtual else repo
+            relative = f"{materialized}/{virtual}" if virtual else materialized
+        package = modules / relative
+        descriptor = package / ".apm/hooks/knowledge-discovery.json"
+        if Path(relative).is_absolute() or ".." in Path(relative).parts:
+            raise SetupFailure("hook-package-invalid", "APM package path escapes apm_modules.", [])
+        if not descriptor.is_file():
+            continue
+        if not descriptor.resolve().is_relative_to(modules.resolve()):
+            raise SetupFailure("hook-package-invalid", "APM hook escapes apm_modules.", [])
+        candidates.append((source, package))
     if len(candidates) != 1:
         raise SetupFailure(
             "hook-package-missing",
             "APM installed no unique package-owned discovery hook bundle.",
             [],
         )
-    package = candidates[0]
-    return f"_local/{package.name}", package
+    return candidates[0]
 
 
 def _hook_command(entry: object, *, launcher: Path | None = None) -> bool:
@@ -821,11 +880,12 @@ def _configure_hook_registrations(
     launcher: Path,
     *,
     environment: dict[str, object] | None = None,
+    python: Path = Path(sys.executable),
 ) -> dict[str, object]:
     """Replace the descriptor marker with the installed venv hook launcher."""
     if not targets:
         return {"status": "disabled", "targets": []}
-    source, package = _hook_package(consumer)
+    source, package = _hook_package(consumer, python=python)
     for target in targets:
         if target in {"codex", "claude"}:
             path = consumer / f".{target}" / "apm-hooks.json"
@@ -887,6 +947,7 @@ def _configure_hook_registrations(
         targets,
         launcher=launcher,
         environment=environment,
+        python=python,
     )
 
 
@@ -1034,11 +1095,12 @@ def _verify_hook_registrations(
     *,
     launcher: Path,
     environment: dict[str, object] | None = None,
+    python: Path = Path(sys.executable),
 ) -> dict[str, object]:
     """Verify one APM-owned registration exists for every requested target."""
     if not targets:
         return {"status": "disabled", "targets": []}
-    source, package = _hook_package(consumer)
+    source, package = _hook_package(consumer, python=python)
     registrations: dict[str, object] = {}
     for target in targets:
         if target in {"codex", "claude"}:
@@ -1516,7 +1578,7 @@ def run_setup(
                 name="apm-install",
                 steps=steps,
             )
-        _, installed_package = _hook_package(consumer_path)
+        _, installed_package = _hook_package(consumer_path, python=python)
         _bind_package_hook(installed_package, hook_launcher)
         if apm_mode == "managed":
             assert apm is not None
@@ -1531,6 +1593,7 @@ def run_setup(
             targets,
             hook_launcher,
             environment=environment_report,
+            python=python,
         )
         if "copilot" in targets:
             registrations = hook_report.get("registrations")
