@@ -10,6 +10,7 @@ from typing import Literal
 from agent_knowledge.domain.configuration import WorkspaceDefinition, parse_workspace
 from agent_knowledge.domain.profiles import (
     EnvironmentVariable,
+    Profile,
     Profiles,
     merge_overrides,
     parse_profiles,
@@ -66,9 +67,45 @@ class ResolvedProfileEnvironment:
 
 def settings_path(path: Path | None) -> Path:
     """Locate one explicit registry or the documented user-owned config file."""
-    return resolve_path(
-        str(path or Path.home() / ".config/agent-knowledge/config.yaml"), base=Path.cwd()
+    if path is None:
+        override = os.environ.get("AGENT_KNOWLEDGE_SETTINGS")
+        if override is not None:
+            if not override or not Path(override).is_absolute():
+                raise ValidationError(
+                    "invalid-settings-path",
+                    "AGENT_KNOWLEDGE_SETTINGS",
+                    "Registry override must be a nonempty absolute path.",
+                )
+            path = Path(override)
+        else:
+            path = Path.home() / ".config/agent-knowledge/config.yaml"
+    return resolve_path(str(path), base=Path.cwd())
+
+
+def resolve_profile_environment(
+    settings: Path | None, profile: str | None
+) -> ResolvedProfileEnvironment | None:
+    """Read the selected credential declaration without opening a workspace or catalog."""
+    registry_path = settings_path(settings)
+    selected = select_profile(read_profiles(registry_path), profile)
+    return _profile_environment(selected, registry_path)
+
+
+def _profile_environment(
+    selected: Profile, registry_path: Path
+) -> ResolvedProfileEnvironment | None:
+    if selected.environment is None:
+        return None
+    environment = ResolvedProfileEnvironment(
+        _authored_path(selected.environment.file, registry_path.parent),
+        selected.environment.variables,
     )
+    validate_environment_session_declaration(
+        str(environment.file),
+        environment.variables,
+        f"settings.profiles.{selected.name}.environment",
+    )
+    return environment
 
 
 def read_profiles(path: Path) -> Profiles:
@@ -219,16 +256,8 @@ def prepare_workspace(
 
     definition = parse_workspace(resolve_values(workspace_mapping(effective)))
     environment = None
-    if selected is not None and selected.environment is not None and registry_path is not None:
-        environment = ResolvedProfileEnvironment(
-            _authored_path(selected.environment.file, registry_path.parent),
-            selected.environment.variables,
-        )
-        validate_environment_session_declaration(
-            str(environment.file),
-            environment.variables,
-            f"settings.profiles.{selected.name}.environment",
-        )
+    if selected is not None and registry_path is not None:
+        environment = _profile_environment(selected, registry_path)
     return PreparedWorkspace(
         selection,
         base_bytes,

@@ -72,14 +72,8 @@ def pin_session_environment(
     environment: ResolvedProfileEnvironment, *, state_directory: Path, session_id: str
 ) -> ResolvedProfileEnvironment:
     """Bind a Claude session to its first value-free environment declaration."""
-    if not state_directory.is_absolute() or not session_id:
-        raise AdapterError(
-            "environment-session-state-invalid",
-            str(state_directory),
-            "Claude environment session state is incomplete.",
-        )
+    pin = _session_pin_path(state_directory, session_id)
     _ensure_private_directory(state_directory)
-    pin = state_directory / f"{hashlib.sha256(session_id.encode()).hexdigest()}.json"
     if not pin.exists():
         data = _session_pin_bytes(environment)
         if len(data) > SESSION_PIN_MAX_BYTES:
@@ -90,6 +84,28 @@ def pin_session_environment(
             )
         _publish_session_pin(pin, data)
     return _read_session_pin(pin)
+
+
+def pinned_session_environment(
+    *, state_directory: Path, session_id: str
+) -> ResolvedProfileEnvironment | None:
+    """Read an existing session declaration before consulting mutable profile settings."""
+    pin = _session_pin_path(state_directory, session_id)
+    if not state_directory.exists() and not state_directory.is_symlink():
+        return None
+    _ensure_private_directory(state_directory)
+    # A broken symlink is invalid persisted state, not an uninitialized session.
+    return _read_session_pin(pin) if pin.exists() or pin.is_symlink() else None
+
+
+def _session_pin_path(state_directory: Path, session_id: str) -> Path:
+    if not state_directory.is_absolute() or not session_id:
+        raise AdapterError(
+            "environment-session-state-invalid",
+            str(state_directory),
+            "Claude environment session state is incomplete.",
+        )
+    return state_directory / f"{hashlib.sha256(session_id.encode()).hexdigest()}.json"
 
 
 def append_claude_environment(destination: Path, environment: ResolvedProfileEnvironment) -> None:

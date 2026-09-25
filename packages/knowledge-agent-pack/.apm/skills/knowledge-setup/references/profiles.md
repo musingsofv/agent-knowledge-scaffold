@@ -133,9 +133,13 @@ another profile for this session. Follow the installed agent-knowledge guide
 and retain the selected profile on every configured call.
 ```
 
-For a nonstandard registry, replace the standard-registry phrase with its
-verified durable absolute path and state that configured calls retain
-`--settings /absolute/registry.yaml`. The `~` above describes the standard user
+For a nonstandard registry on one machine, replace the standard-registry phrase
+with its verified durable absolute path and state that configured calls retain
+`--settings /absolute/registry.yaml`. For a shared checkout, keep machine paths
+out of the authored recommendation: say to use the named profile from the local
+registry selected by `AGENT_KNOWLEDGE_SETTINGS` or the standard user location.
+Follow [Portable hooks](portable-hooks.md) to configure and verify that route
+in each environment. The `~` above describes the standard user
 location; it is not a literal path to write into registry YAML or pass to the
 CLI. Keep this instruction limited to routing: do not copy credential values,
 env mappings, query rules or the guide's complete selection procedure into it.

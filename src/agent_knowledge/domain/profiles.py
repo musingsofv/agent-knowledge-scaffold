@@ -107,6 +107,7 @@ _ENVIRONMENT_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 PROFILE_ENVIRONMENT_SESSION_MAX_BYTES = 16_384
 _RESERVED_ENVIRONMENT_TARGETS = frozenset(
     {
+        "AGENT_KNOWLEDGE_SETTINGS",
         "BASHPID",
         "BASH_ARGC",
         "BASH_ARGV",

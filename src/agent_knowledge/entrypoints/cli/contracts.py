@@ -376,7 +376,8 @@ def describe(value: object) -> Description:
                 "session starts; selecting another name does not mutate that environment."
             ),
             "--settings": (
-                "Registry path; otherwise ~/.config/agent-knowledge/config.yaml. "
+                "Registry path; takes precedence over the absolute AGENT_KNOWLEDGE_SETTINGS "
+                "override, then ~/.config/agent-knowledge/config.yaml. "
                 "Unqualified operations use its default_profile."
             ),
             "--harness": "Optional caller-supplied codex/claude/copilot; before command.",

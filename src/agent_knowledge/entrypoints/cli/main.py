@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 from collections.abc import Sequence
+from contextlib import suppress
 from dataclasses import asdict
 from pathlib import Path
 from time import monotonic
@@ -27,7 +28,7 @@ from agent_knowledge.infrastructure.configuration import Workspace, resolve_work
 from agent_knowledge.infrastructure.documents import load_mapping
 from agent_knowledge.infrastructure.errors import AdapterError
 from agent_knowledge.infrastructure.filesystem import read_bytes, resolve_path
-from agent_knowledge.infrastructure.profiles import list_profiles
+from agent_knowledge.infrastructure.profiles import list_profiles, settings_path
 from agent_knowledge.infrastructure.receipts import record_terminal
 
 _REQUEST_BYTES = 1048576
@@ -47,7 +48,11 @@ def _parser() -> Parser:
     parser.add_argument("--config", help="Explicit workspace YAML; bypass profile settings.")
     parser.add_argument("--profile", help="Exact named knowledge profile.")
     parser.add_argument(
-        "--settings", help="Profile registry; defaults to ~/.config/agent-knowledge/config.yaml."
+        "--settings",
+        help=(
+            "Profile registry; overrides AGENT_KNOWLEDGE_SETTINGS or "
+            "~/.config/agent-knowledge/config.yaml."
+        ),
     )
     parser.add_argument("--output", choices=("json", "text"), default="json")
     parser.add_argument("--harness", help="Caller-supplied claude, codex or copilot provenance.")
@@ -234,15 +239,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if workspace is not None:
         payload["selection"] = workspace.selection.summary(workspace.fingerprint)
     elif args.command not in {"describe", "profiles list", None} and not payload.get("selection"):
+        selected_settings = None
+        if args.config is None:
+            with suppress(ValidationError, AdapterError):
+                selected_settings = str(
+                    settings_path(Path(args.settings) if args.settings is not None else None)
+                )
         payload["selection"] = {
             "profile": args.profile,
-            "settings_path": (
-                str(Path(args.settings).absolute())
-                if args.settings is not None
-                else str(Path.home() / ".config/agent-knowledge/config.yaml")
-                if args.config is None
-                else None
-            ),
+            "settings_path": selected_settings,
             "config_path": str(Path(args.config).absolute()) if args.config is not None else None,
             "mode": "config" if args.config else "profile" if args.profile else "default",
             "effective_fingerprint": None,

@@ -44,6 +44,11 @@ its applicable instructions, manifests, pinned commands, targets and local skill
 catalog before choosing the setup mode or mutating consumer configuration.
 Preserve those contracts; already authorized integration does not need another
 approval merely because the repository owns its build commands.
+For shared checkouts or hooks committed for multiple environments, read
+[Portable hooks](references/portable-hooks.md). Select `--portable-hooks` with an
+explicit profile, provision the runtime and registry locally in each environment,
+and verify PATH in the harness process. Do not bind a shared checkout to one
+machine's absolute paths or put credentials in committed configuration.
 
 1. Resolve the intended workspace path, suggesting
    `<current checkout>/knowledge-workspace.yaml` when not supplied. Inspect
