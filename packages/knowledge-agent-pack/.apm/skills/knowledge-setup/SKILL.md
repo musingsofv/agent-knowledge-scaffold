@@ -173,11 +173,21 @@ Use a durable primary checkout or a deliberately non-project scaffold; do not
 place the inbox in a temporary linked worktree.
 
 Before reporting a fresh setup ready, resolve `scaffold_root` and `code_root`
-from the configuration file and prove that the checkout which will originate
-signals is strictly below `code_root`. Equality is invalid because it cannot
-produce a stable relative project identity. Run one session-filtered
-`signal list` from that checkout as part of readiness; repair the derived path
-if it reports `origin-outside-code-root`.
+from the selected configuration. Signal origin is derived from the Git checkout
+containing that configuration, not the shell's working directory. For project
+capture, prove that the resolved checkout is strictly below `code_root`;
+equality cannot produce a stable relative project identity. Repair an
+`origin-outside-code-root` result without guessing another project's identity.
+
+When a centrally configured profile deliberately serves multiple consumers,
+use shared capture (`origin.project_path: null`) and retain the actual producing
+repository and concrete paths in signal evidence. Copy the configured scope and
+source sets from `context`; they do not establish canonical applicability.
+Verify capture and session-filtered listing with `include_shared: true` using
+the exact provider session handle. Then verify that the one compounding task
+inventories the shared inbox without a session filter and follows every
+continuation. Changing cwd alone cannot select another consumer's inbox; do not
+create duplicate profiles or jobs to compensate for that assumption.
 
 ## Verify and install the runtime
 
