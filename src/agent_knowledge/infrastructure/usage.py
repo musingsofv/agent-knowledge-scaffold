@@ -87,12 +87,14 @@ def usage_lock(path: Path) -> Iterator[None]:
     ensure_directory(path.parent)
     try:
         with open_directory(path.parent) as directory:
-            descriptor = os.open(
-                path.name,
-                os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
-                0o600,
-                dir_fd=directory,
-            )
+            flags = os.O_RDWR | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
+            # Nonexclusive openat(O_CREAT) can fail with ENOENT under contention on macOS.
+            try:
+                descriptor = os.open(
+                    path.name, flags | os.O_CREAT | os.O_EXCL, 0o600, dir_fd=directory
+                )
+            except FileExistsError:
+                descriptor = os.open(path.name, flags, dir_fd=directory)
             try:
                 fcntl.flock(descriptor, fcntl.LOCK_EX)
                 opened = os.fstat(descriptor)

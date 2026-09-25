@@ -658,7 +658,7 @@ def test_concurrent_start_serializes_entire_lifecycle(tmp_path: Path) -> None:
     with ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda _: attempt(), range(2)))
     assert sum(item.startswith("compound-") and item != "compound-active" for item in results) == 1
-    assert any(item in {"compound-active", "usage-lock-failed"} for item in results)
+    assert "compound-active" in results
     assert len(read_activity_log(activity_path(loaded)).active_runs) == 1
 
 

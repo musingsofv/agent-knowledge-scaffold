@@ -55,11 +55,21 @@ Local verification on 2026-09-25 passed fresh setup, reuse, CLI operations and
 all three provider hook fixtures with CPython 3.11.8, 3.12.12, 3.13.12 and
 3.14.6. The default launcher also passed when started by the system Python,
 selecting a supported installed interpreter for the consumer.
-The full suite passed 1,385 tests on 3.11, 3.12 and 3.14. On 3.13, 1,384 passed
-and the existing macOS receipt-lock creation race failed
-`test_concurrent_appends_preserve_every_complete_record`; a focused retry also
-failed. This remains a separate filesystem issue previously observed on 3.11,
-not an exact-version setup rejection. Runtime receipt code is unchanged here.
+The initial version-matrix run exposed a macOS receipt-lock creation race on
+3.13, previously observed on 3.11: concurrent directory-relative opens with
+`O_CREAT` could fail with `ENOENT` before acquiring the lock. The follow-up fix
+creates the lock exclusively and opens it without creation when another writer
+has already created it. No-follow access, inode checks, hardlink rejection and
+serialization remain in place.
+
+After the fix, all 1,388 tests passed on each of 3.11, 3.12, 3.13 and 3.14.
+The new fresh-lock contention regression reproduced the failure before the fix
+and passed afterward. Additional macOS stress checks on 3.11 and 3.13 each
+passed 100 fresh-lock batches with eight threads and another 100 with eight
+separate processes, preserving all 3,200 receipts across both versions. The
+compounding concurrency test now requires the losing caller to receive
+`compound-active`; it no longer accepts a lock-acquisition failure. Ruff,
+formatting and mypy checks passed.
 
 For a prepared consumer, the provider-only fixture driver is:
 

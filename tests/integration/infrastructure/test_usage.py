@@ -5,6 +5,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
+from threading import Barrier
 
 import pytest
 
@@ -13,8 +14,51 @@ from agent_knowledge.infrastructure.usage import (
     append_event,
     prune_retrieval,
     read_events,
+    usage_lock,
     write_artifact,
 )
+
+
+def test_competing_writers_create_and_reuse_one_persistent_lock(tmp_path: Path) -> None:
+    start = Barrier(8, timeout=10)
+
+    def increment(lock: Path, counter: Path) -> tuple[int, int]:
+        start.wait()
+        with usage_lock(lock):
+            value = int(counter.read_text()) + 1
+            counter.write_text(str(value))
+            return value, lock.stat().st_ino
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        for batch in range(20):
+            lock = tmp_path / f"{batch}.lock"
+            counter = tmp_path / f"{batch}.counter"
+            counter.write_text("0")
+            operations = [pool.submit(increment, lock, counter) for _ in range(8)]
+            results = [operation.result(timeout=15) for operation in operations]
+            assert {value for value, _ in results} == set(range(1, 9))
+            assert counter.read_text() == "8"
+            with usage_lock(lock):
+                assert {inode for _, inode in results} == {lock.stat().st_ino}
+                assert lock.stat().st_mode & 0o777 == 0o600
+
+
+@pytest.mark.parametrize("alias", ["symlink", "hardlink"])
+def test_existing_aliased_lock_is_rejected_before_writing_receipts(
+    tmp_path: Path, alias: str
+) -> None:
+    target = tmp_path / "outside"
+    target.write_text("untouched")
+    path = tmp_path / "events.jsonl"
+    lock = tmp_path / ".events.jsonl.lock"
+    if alias == "symlink":
+        lock.symlink_to(target)
+    else:
+        os.link(target, lock)
+    with pytest.raises(AdapterError):
+        append_event(path, {"id": 1})
+    assert target.read_text() == "untouched"
+    assert not path.exists()
 
 
 def test_concurrent_appends_preserve_every_complete_record(tmp_path: Path) -> None:
