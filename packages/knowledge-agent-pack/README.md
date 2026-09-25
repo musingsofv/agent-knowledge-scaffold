@@ -7,6 +7,10 @@ Claude Code, Copilot and other APM-compatible targets. The Python
 distribution remains the owner of the CLI contract, guide and authoring
 templates.
 
+Licensed under [0BSD](LICENSE), including the distributed skills, instructions
+and hook declarations. Commercial use, modification and redistribution are
+permitted without attribution or source-sharing requirements.
+
 See the repository's [harness support matrix](../../docs/harness-support.md) for
 the verified Claude Code, Codex and Copilot capabilities and provider limits.
 

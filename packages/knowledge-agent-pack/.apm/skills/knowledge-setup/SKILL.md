@@ -1,5 +1,6 @@
 ---
 name: knowledge-setup
+license: 0BSD
 description: >
   Set up an organization-neutral knowledge workspace from business context,
   including runtime, hooks and compounding. Use when onboarding or reconfiguring.

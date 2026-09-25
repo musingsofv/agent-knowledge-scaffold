@@ -4,6 +4,9 @@ An organization-neutral repository for shared APM skills/packages and the
 knowledge agents need for business and engineering work. Organizational knowledge
 belongs in explicitly configured sources; this scaffold contains no organizational corpus.
 
+Licensed under [0BSD](LICENSE): commercial use, modification and redistribution
+are permitted without attribution or source-sharing requirements.
+
 To adopt it, clone this repository into a durable directory and run the bundled
 `knowledge-setup` skill. That checkout becomes your knowledge instance, with
 `origin` pointing to your own private repository and `scaffold` pointing upstream

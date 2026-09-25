@@ -1,4 +1,4 @@
 name: knowledge-agent-pack
 version: 0.1.0
 description: Organization-neutral APM discovery instructions for the agent-knowledge CLI.
-license: UNLICENSED
+license: 0BSD

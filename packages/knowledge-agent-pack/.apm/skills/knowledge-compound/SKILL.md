@@ -1,5 +1,6 @@
 ---
 name: knowledge-compound
+license: 0BSD
 description: >
   Process durable knowledge signals into validated updates and dispositions.
   Use when running a scheduled or manual compounding run. Do not use when

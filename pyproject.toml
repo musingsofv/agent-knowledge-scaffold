@@ -6,6 +6,8 @@ build-backend = "hatchling.build"
 name = "agent-knowledge-scaffold"
 version = "0.1.0"
 description = "Explicit, file-backed knowledge discovery for agents."
+license = "0BSD"
+license-files = ["LICENSE"]
 requires-python = ">=3.11"
 dependencies = [
     "pyyaml==6.0.2",
@@ -31,7 +33,7 @@ packages = ["src/agent_knowledge"]
 "src/agent_knowledge/resources/reflection-reminder.txt" = "agent_knowledge/resources/reflection-reminder.txt"
 
 [tool.hatch.build.targets.sdist]
-include = ["src/agent_knowledge", "pyproject.toml", "README.md", "docs/agent-contract.md"]
+include = ["src/agent_knowledge", "pyproject.toml", "README.md", "LICENSE", "docs/agent-contract.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

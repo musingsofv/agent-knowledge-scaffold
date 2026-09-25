@@ -1,5 +1,6 @@
 name: agent-knowledge-scaffold
 version: 0.1.0
+license: 0BSD
 description: Organization-neutral APM package catalogue for the agent-knowledge
   CLI.
 targets:
