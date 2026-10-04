@@ -50,6 +50,27 @@ flags. JSON is the default output format; `--output text` renders the same
 values. Exit 0 includes a valid empty result, exit 2 reports invalid input or
 content, and exit 3 reports incomplete external-state or runtime failure.
 
+When an operation's request shape or supported values are unfamiliar, inspect
+its schema before guessing:
+
+```bash
+agent-knowledge describe --request-file - <<'JSON'
+{"schema":"search"}
+JSON
+```
+
+Use the operation name, such as `inspect` or `catalog`, in `schema`. Reuse this
+information while it still describes the running installation; this is not a
+required call before every query. Search uses plural `topics`, not `topic`.
+`text` is an object with nonempty phrase arrays under `any`, `all`, or both;
+for example, `{"text":{"any":["rollback","recovery"],"all":["migration"]}}`
+requires `migration` and either alternative. Inspect takes one singular
+`document` object with `source` and source-relative `path`, as shown below.
+
+For a request-schema error, use the diagnostic's field and the operation schema
+to correct the request while preserving its intended question and filters.
+Do not discard fields arbitrarily until a different query happens to succeed.
+
 ## Select a knowledge profile for this session
 
 The user-owned registry is `~/.config/agent-knowledge/config.yaml`. Resolution
@@ -279,9 +300,22 @@ query; request `family:<id>` when family-level guidance is wanted.
 
 The initial search can be broad by kind and text. Once the task is understood,
 issue focused searches for separate questions such as product behavior, system
-context, topics and operational procedures. The command does not
-plan those passes or infer a task from prose. The agent decides which questions
-matter at the current stage.
+context, topics and operational procedures. Use descriptions and match locations
+to assess relevance; a result matching a broad word such as `review` may concern
+another task. Use catalog-discovered identifiers when adding filters. When
+narrowing by scope, explicitly include relevant shared and consumer scopes,
+such as `org:example` and `repo:orders-api`; neither implies the other. Add only
+facets supported by the question, retaining general guidance through `any` or
+an unfiltered pass where appropriate. The command does not plan those passes
+or infer a task from prose. The agent decides which questions matter at the
+current stage.
+
+An exact phrase, library name or guessed title returning no matches does not
+establish that the owner is absent. Try terms for the underlying behavior and
+review likely owners and applicable facets. If the configured source and path
+are already known, use `inspect` directly instead of repeatedly guessing search
+phrases. Distinguish a missing observation from existing guidance described in
+different language.
 
 Each result identifies its source, source-relative path, resolved local path,
 kind, description and authored facets. It also reports bytes, physical lines,
@@ -289,6 +323,9 @@ frontmatter/body ranges, a complete-byte fingerprint, link count and matching
 line ranges. Metadata-only matches are marked as such. Results and locations
 are bounded and paged with opaque continuations tied to the original request
 and source snapshot. A changed snapshot requires a fresh search.
+Follow returned continuations with the original request when the task needs
+coverage beyond the first page, including further match locations when relevant.
+A truncated page cannot support an exhaustive coverage or absence claim.
 
 Use `inspect` after selecting a file:
 
