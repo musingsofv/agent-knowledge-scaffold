@@ -85,7 +85,7 @@ remote reference when the manifest will be shared across machines:
 
 ```bash
 apm install --target codex,claude,copilot --no-policy \
-  musingsofv/agent-knowledge-scaffold/packages/knowledge-agent-pack#main
+  example/agent-knowledge-scaffold/packages/knowledge-agent-pack#main
 apm compile --target codex,claude,copilot --force-instructions
 ```
 
@@ -115,7 +115,8 @@ registrations. Setup converts Copilot's portable projection to native
 on each model-facing prompt; startup and resume receive discovery plus
 reflection. Copilot has no model-visible event after in-session compaction. Its
 always-on discovery instructions remain, and the next user prompt receives the
-reflection reminder only. The package does not install a scheduler or copy a
+reflection reminder, plus a delegation instruction when the configured prompt
+fallback is due. The package does not install a scheduler or copy a
 knowledge corpus. By default, setup binds the absolute launcher from the verified
 Python 3.11+ virtual environment. For shared checkouts or committable hooks, use
 `--portable-hooks --profile <name>` and follow
@@ -132,7 +133,7 @@ Re-running setup updates that one owned command in place and reconciles the
 dependency and deployment hashes for the standalone Copilot file;
 hand-authored provider hook files remain in place. To remove the package, use
 the exact key from `apm deps list`: for the remote example above,
-`apm uninstall musingsofv/agent-knowledge-scaffold/packages/knowledge-agent-pack`,
+`apm uninstall example/agent-knowledge-scaffold/packages/knowledge-agent-pack`,
 or `apm uninstall _local/knowledge-agent-pack` for the local example. Re-enable
 it by installing the same package reference again, then rerun the same
 `knowledge-setup` flow. Reinstallation restores
@@ -295,11 +296,12 @@ identity, source/catalog paths, producer root,
 signal inbox, usage evidence directory and scaffold-local virtual environment.
 Managed setup compiles all three supported APM targets (`codex`, `claude`,
 `copilot`) and binds their hooks by default; repository-owned setup separates
-preparation, installation/compilation and binding as described above. Scheduled
-automation readiness is reported separately for each
-provider. Missing or unauthenticated providers are reported individually;
-setup does not ask you to choose a subset. It uses a daily cadence in the local
-timezone where a durable provider surface is available.
+preparation, installation/compilation and binding as described above. Local
+trigger readiness is reported separately from hook and credential readiness.
+Missing or unauthenticated providers are reported individually. Setup prefers a
+verified durable native local schedule with a daily cadence in the local
+timezone; otherwise it selects prompt fallback with a rolling 24-hour interval.
+Explicit manual/disabled choices and working local schedules are preserved.
 Fresh setup defaults to GitHub PR publication for human review. It derives the
 destination from the canonical knowledge checkout's verified GitHub remote,
 proposes its verified default branch and prefix `knowledge/`, then writes an
@@ -313,8 +315,8 @@ The CLI still treats an absent publication block as disabled. Compounding create
 no empty PR and never merges automatically; unresolved updates retain signals.
 Enabling compounding also authorizes PRs for authored skills and instructions in
 every participating consumer repository. Setup records their verified routes in
-the shared automation and preserves explicit user exceptions. Adding another
-consumer does not require another publication opt-in: the agent prepares and
+the selected local task or authored setup context and preserves explicit user
+exceptions. Adding another consumer does not require another publication opt-in: the agent prepares and
 validates the change, opens or updates the owning repository's PR, and reports
 it as ready for your review. It retains signals only for unresolved work, not
 merely because the PR is awaiting your review or merge.
@@ -330,8 +332,8 @@ reports one exact start action to follow. It reports app limitations only when
 they are relevant; users do not assemble provider flags or edit hook files.
 Changing credential profiles always requires running setup for the target
 profile and then starting a new session from its reported action. Use separate
-consumer/project configurations or provider-native cloud environments for
-simultaneous scheduled tasks that need different profiles. Provider mechanics
+consumer/project configurations and local sessions for simultaneous tasks
+that need different credential profiles. Provider mechanics
 remain in the setup skill's agent-facing references.
 
 Usage defaults are `receipts: {enabled: true, directory: ./ai/usage,
@@ -350,13 +352,36 @@ compounding; missing authentication required for publication does. Do not
 register a job known to fail or mask missing credentials with an unrelated
 ambient account.
 
-The skill configures one durable automation owner per signal store, using the
-marker `agent-knowledge-compound:<workspace_id>`, when the provider offers an
-authorized persistent surface. The automation invokes knowledge-compound with
-the absolute configuration path. Run it once from the provider's run-now
-control and retain the pause/remove controls. Codex Scheduled is a supported
-native surface. Copilot CLI `/every` and `/after` remain attached to one open
-interactive session, so durable Copilot work needs an explicitly authorized
-external scheduler invoking `copilot -p` or a cloud automation. The provider
-owns scheduling; this repository does not run a daemon, cron loop or launchctl
-mutation. See the provider references in the installed knowledge-setup skill.
+The skill configures one trigger owner/mode per physical signal store, including
+profile aliases and multiple providers. The existing activity JSONL records the
+agreement, run identities and completion; it is not duplicated in a hook-owned
+timestamp file. Binding verifies installed compound resources and write
+readiness without implicitly activating a new agreement. Run the consumer's
+final checks, then execute the exact pending activation command returned by
+setup; preserve an already matching agreement. Compounding conflicts or stale
+resources have a separate pending result while valid base reminders still bind.
+Native local schedules use their own cadence/timezone. Prompt
+fallback is opportunistic: an ordinary prompt checks bounded metadata, and only
+when due asks the main agent to delegate to the installed compound skill. The
+worker atomically rechecks due state before editing, publishing or draining;
+redundant workers exit. No qualifying prompt means no run. Discovery/reflection
+continues if the due check cannot run.
+
+Codex desktop Scheduled is distinct from Codex CLI. Claude `/loop` and Copilot
+`/every` or `/after` are not durable daily scheduling merely because their names
+look recurring. Use the fallback when no verified durable native local surface
+exists. Keep an existing working schedule; do not enable both modes. Setup does
+not install cron/systemd jobs, remote workflows or a daemon. Follow the installed
+[local compounding reference](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/local-compounding.md)
+for trigger configuration, truthful terminal classifications, retries and
+pause/remove actions. Live prompt/worker proof remains separate from fixtures.
+
+For your own Docker/devcontainer image, follow
+[container setup](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/containers.md).
+Provision a pinned runtime during image build without knowledge mounts or
+credentials. After mounts exist, `--runtime-mode existing` verifies that runtime
+against the read-only package input without uv, installation or venv writes.
+Use portable hooks and an environment-local registry as the actual harness
+user. Keep persistent state and locks together; ordinary launches do not
+reinstall or rebind. The runtime option does not change the consumer's APM
+`prepare -> owned install/compile -> bind -> checks` integration contract.

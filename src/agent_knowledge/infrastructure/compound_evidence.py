@@ -44,9 +44,9 @@ def archive_path(workspace: Workspace, run_id: str, snapshot: SignalSnapshot) ->
 
 
 @contextmanager
-def lifecycle_lock(path: Path) -> Iterator[None]:
+def lifecycle_lock(path: Path, *, blocking: bool = True) -> Iterator[None]:
     """Serialize the entire read/validate/archive/remove lifecycle across CLI processes."""
-    with usage_lock(Path(str(path) + ".lock")):
+    with usage_lock(Path(str(path) + ".lock"), blocking=blocking):
         yield
 
 

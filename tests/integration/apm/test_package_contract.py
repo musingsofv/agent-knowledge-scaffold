@@ -132,6 +132,7 @@ def test_setup_helper_is_standard_library_python_and_script_is_valid() -> None:
         "subprocess",
         "sys",
         "tempfile",
+        "zipfile",
         "typing",
     }
 

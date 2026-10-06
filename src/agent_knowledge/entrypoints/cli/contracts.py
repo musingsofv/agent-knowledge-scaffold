@@ -175,7 +175,10 @@ def _schemas() -> dict[str, dict[str, FieldSpec]]:
             ),
             "setup": _field(
                 "object",
-                "Optional non-secret venv, harness and native automation preferences; "
+                "Optional venv, harnesses, automation and compounding {mode: "
+                "disabled/manual/local-schedule/prompt, owner, interval_seconds:86400, "
+                "retry_seconds:3600}; seconds range 3600..2592000. Register its "
+                "shared-store agreement with compound configure-trigger."
                 "credential values remain in provider state or an external profile env file; "
                 "task IDs remain harness state.",
             ),
@@ -217,11 +220,43 @@ def _schemas() -> dict[str, dict[str, FieldSpec]]:
         "compound": {
             "action": _field(
                 "string",
-                "One of status, start, finish or drain; coordinates activity and "
-                "guarded signal removal.",
+                "One of status, due, configure-trigger, record-worker, start, finish or drain; "
+                "coordinates activity and guarded signal removal.",
                 True,
             ),
-            "workspace_id": _field("string", "Required for start; must match --config."),
+            "automatic": _field(
+                "boolean",
+                "Start only: atomically recheck prompt eligibility before recording work; "
+                "losing workers receive started:false and exit.",
+            ),
+            "worker_id": _field(
+                "string",
+                "Exact provider subagent handle when exposed; required for record-worker, which "
+                "attaches late identity to an exact active/finished run without rerunning work. "
+                "Never fabricate or assume "
+                "resumability.",
+            ),
+            "parent_session_id": _field(
+                "string", "Exact delegating parent session handle when exposed."
+            ),
+            "recovery_of": _field(
+                "string",
+                "Previously reconciled and finished run ID; never authorizes timeout takeover.",
+            ),
+            "completion": _field(
+                "string",
+                "Finish: completed/deferred/failed/empty; required for automatic runs. "
+                "Completed/deferred require every selected disposition and wait the "
+                "interval. Failed waits retry_seconds. Empty requires no inputs and "
+                "establishes no cooldown.",
+            ),
+            "expected_trigger": _field(
+                "object",
+                "configure-trigger compare-and-swap: exact previous "
+                "mode/owner/interval_seconds/retry_seconds from status when explicitly "
+                "replacing its shared-store agreement.",
+            ),
+            "workspace_id": _field("string", "Required for start; must match selected workspace."),
             "selected": _field(
                 "object[]",
                 "Signal id/path/sha256 snapshot selected by signal list; complete bytes are "
@@ -232,7 +267,8 @@ def _schemas() -> dict[str, dict[str, FieldSpec]]:
             "automation_id": _field("string", "Optional opaque native automation handle."),
             "run_id": _field(
                 "string",
-                "Required for drain and finish; must identify this workspace's recorded run.",
+                "Required for drain, finish and record-worker; must identify this workspace's "
+                "recorded run.",
             ),
             "outcome": _field(
                 "string",

@@ -11,6 +11,7 @@ import re
 from dataclasses import dataclass
 from enum import StrEnum
 
+from .configuration import CompoundTrigger, parse_compound_trigger
 from .validation import (
     ValidationError,
     read_identifier,
@@ -110,6 +111,12 @@ class CompoundRequest:
     dispositions: tuple[SignalDisposition, ...] = ()
     publication_verified: bool = False
     publication: PublicationEvidence | None = None
+    automatic: bool = False
+    worker_id: str | None = None
+    parent_session_id: str | None = None
+    recovery_of: str | None = None
+    completion: str | None = None
+    expected_trigger: CompoundTrigger | None = None
 
 
 _FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}\Z")
@@ -233,6 +240,12 @@ def parse_compound_request(value: object) -> CompoundRequest:
         "",
         {"action"},
         {
+            "automatic",
+            "worker_id",
+            "parent_session_id",
+            "recovery_of",
+            "completion",
+            "expected_trigger",
             "workspace_id",
             "selected",
             "harness",
@@ -246,8 +259,30 @@ def parse_compound_request(value: object) -> CompoundRequest:
         },
     )
     action = read_string(fields["action"], "action")
-    if action not in {"status", "start", "finish", "drain"}:
-        raise ValidationError("invalid-value", "action", "Expected status, start, finish or drain.")
+    if action not in {
+        "status",
+        "due",
+        "configure-trigger",
+        "record-worker",
+        "start",
+        "finish",
+        "drain",
+    }:
+        raise ValidationError(
+            "invalid-value",
+            "action",
+            "Expected status, due, configure-trigger, record-worker, start, finish or drain.",
+        )
+    for field, required_action in (
+        ("automatic", "start"),
+        ("completion", "finish"),
+        ("expected_trigger", "configure-trigger"),
+        ("recovery_of", "start"),
+    ):
+        if field in fields and action != required_action:
+            raise ValidationError(
+                "invalid-field", field, f"Field applies only to {required_action}."
+            )
     workspace_id = (
         read_string(fields["workspace_id"], "workspace_id") if "workspace_id" in fields else None
     )
@@ -265,6 +300,27 @@ def parse_compound_request(value: object) -> CompoundRequest:
     if action == "start":
         if workspace_id is None:
             raise ValidationError("missing-field", "workspace_id", "Start requires workspace_id.")
+    elif action == "record-worker":
+        if run_id is None or fields.get("worker_id") is None:
+            raise ValidationError(
+                "missing-field", "run_id/worker_id", "record-worker requires run_id and worker_id."
+            )
+        if any(
+            field in fields
+            for field in (
+                "selected",
+                "outcome",
+                "dispositions",
+                "publication",
+                "publication_verified",
+                "automation_id",
+            )
+        ):
+            raise ValidationError(
+                "invalid-field",
+                "record-worker",
+                "Worker attachment accepts identity metadata only.",
+            )
     elif action == "finish":
         if run_id is None:
             raise ValidationError("missing-field", "run_id", "Finish requires run_id.")
@@ -277,7 +333,23 @@ def parse_compound_request(value: object) -> CompoundRequest:
             raise ValidationError("missing-field", "selected", "Drain requires selected snapshots.")
         if not dispositions:
             raise ValidationError("missing-field", "dispositions", "Drain requires dispositions.")
+    automatic = fields.get("automatic", False)
+    if not isinstance(automatic, bool):
+        raise ValidationError("invalid-type", "automatic", "Expected a boolean.")
+    completion = _optional_request_text(fields.get("completion"), "completion")
+    if completion is not None and completion not in {"completed", "deferred", "failed", "empty"}:
+        raise ValidationError("invalid-value", "completion", "Unknown terminal classification.")
     return CompoundRequest(
+        automatic=automatic,
+        completion=completion,
+        worker_id=_optional_worker_handle(fields.get("worker_id"), "worker_id"),
+        parent_session_id=_optional_worker_handle(
+            fields.get("parent_session_id"), "parent_session_id"
+        ),
+        recovery_of=_optional_request_text(fields.get("recovery_of"), "recovery_of"),
+        expected_trigger=parse_compound_trigger(fields["expected_trigger"], "expected_trigger")
+        if "expected_trigger" in fields
+        else None,
         action=action,
         workspace_id=workspace_id,
         selected=selected,
@@ -469,3 +541,17 @@ __all__ = [
     "select_pull_request",
     "parse_compound_request",
 ]
+
+
+def _optional_worker_handle(value: object, path: str) -> str | None:
+    """Keep exact exposed worker handles, including provider path-shaped IDs."""
+    result = _optional_request_text(value, path)
+    if result is not None and (
+        len(result) > 256
+        or any(
+            character.isspace() or ord(character) < 32 or ord(character) == 127
+            for character in result
+        )
+    ):
+        raise ValidationError("invalid-value", path, "Expected a short opaque worker handle.")
+    return result

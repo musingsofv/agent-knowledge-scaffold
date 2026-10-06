@@ -10,6 +10,8 @@ Absolute binding remains the default for a single-machine installation.
 1. Install the Python 3.11+ runtime separately in each environment. Keep the venv
    outside a checkout shared by incompatible operating systems. For example, a
    Linux container can use `/opt/agent-knowledge-venv`; its host has its own venv.
+   For image-time provisioning and nonroot post-mount verification, follow
+   [Container setup](containers.md).
 2. Put that environment's venv `bin` on the PATH inherited by the harness.
    A Dockerfile can use `ENV PATH="/opt/agent-knowledge-venv/bin:${PATH}"`.
    Do not assume a desktop app inherits interactive shell startup files.
@@ -57,10 +59,13 @@ python3 /opt/scaffold/packages/knowledge-agent-pack/.apm/skills/knowledge-setup/
   --package /opt/scaffold \
   --venv /opt/agent-knowledge-venv \
   --consumer /workspace/orders-api \
-  --profile work --apm-mode bind --portable-hooks
+  --profile work --runtime-mode existing --apm-mode bind --portable-hooks
 ```
 
-Fresh helper-managed APM installations can use the same flag with
+`--runtime-mode existing` verifies the already provisioned runtime against
+the read-only `--package` input without uv, installation or venv writes.
+Omit it when setup should install the runtime. This choice is independent from
+APM ownership. Fresh helper-managed APM installations can use the same flag with
 `--apm-mode managed`. `prepare` still installs no hooks and leaves binding
 verification pending. Portable binding requires an explicit profile; register a
 profile first for a direct-config installation.
@@ -130,3 +135,20 @@ to the same writable knowledge state on the same storage and lock files; moving
 only locks to separate per-process locations would defeat coordination. A
 Linux-volume knowledge checkout can coexist with a host-mounted consumer repo.
 The recorded Docker comparison is in the scaffold's `docs/r8-harness-proof.md`.
+
+
+## Compounding in portable environments
+
+The same prompt hook can request a delegated compound worker when configured
+through [local compounding](local-compounding.md). It resolves the environment's
+explicit profile and registry before checking the shared activity log. Aliases
+and providers sharing a store must agree on one trigger owner and mode. Keep
+signal/activity storage and locks together on proven persistent storage; a new
+container path is not a new compounding owner. Rebinding verifies installed
+compound-resource parity and write readiness but does not implicitly record a
+new trigger agreement. Execute its pending activation command after the
+consumer's final checks; preserve an already matching agreement. Unavailable
+compounding leaves valid base reminders usable with a separate diagnostic.
+Normal harness startup does not
+install packages, bind hooks or reset completion history. Disable automatic
+work through the trigger configuration rather than deleting activity records.

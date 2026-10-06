@@ -1,56 +1,55 @@
-# GitHub Copilot compounding schedule
+# GitHub Copilot CLI local compounding
 
-Copilot CLI 1.0.86 exposes experimental `/every` and `/after` commands, but
-they belong to the current interactive session. An `/every` schedule triggers
-only while that session is running. Resuming restores it and starts the next
-recurring wait from reopen; missed recurring runs are not caught up. An
-overdue `/after` schedule runs immediately when the session is reopened. These
-commands are useful for attended session work, but they are not a durable
-unattended daily compounding automation.
+Copilot CLI's `/every` and `/after` commands belong to an interactive session.
+They do not provide durable unattended daily compounding. In the previously
+verified version, recurring waits resume from reopen and missed recurring runs
+are not caught up; check current provider help rather than promising persistence.
+See the provider's [scheduled prompts guide](https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/schedule-prompts).
 
-Do not report `/every 1d` as completed automation setup. For durable work, use
-an explicitly authorized external scheduler that invokes `copilot -p`, such as
-a GitHub Actions scheduled workflow, or use a Copilot cloud automation with
-the repository's Agents secrets and variables. Follow the provider's current
-documentation:
+When no durable native local schedule is available, configure the installed
+[prompt fallback](local-compounding.md). Setup binds the portable prompt marker
+to native `userPromptTransformed`. Its output preserves the user's prompt and
+adds main-agent delegation context only when compounding is due. Prompt-mode repository
+hooks require an already trusted working directory; setup does not grant trust.
 
-<https://docs.github.com/en/copilot/how-tos/copilot-cli/automate-copilot-cli/schedule-prompts>
+Verify an ordinary prompt delegates a worker loading the installed compound
+skill, with the exact launcher, explicit selector, originating consumer and
+available provider/session/worker handles. The worker atomically rechecks due
+state before editing, publishing or draining. Redundant workers may spawn and
+exit. The main task continues; no qualifying prompt means no run. A later prompt
+must remain quiet after a completed run. Treat a missing delegation capability
+or unauthenticated model as an explicit proof gap, never a successful fixture.
 
-Creating a repository workflow or cloud automation mutates remote state. Show
-the exact proposed cadence, repository, credential surface, working directory
-and prompt, then obtain the developer's confirmation before creating or
-updating it. Search for this exact marker first and keep one owner per signal
-store:
+Native subagent tools are the execution interface. Begin the worker's task with
+`[agent-knowledge-compound-worker]` as the shared reference requires. Never use
+shell-started `copilot -p` or another model CLI as the worker. Missing native
+subagent tools leave prompt-triggered compounding pending.
 
-~~~text
-agent-knowledge-compound:<workspace_id>
-~~~
+In a marked child, the hook preserves reflection, omits recursive delegation
+and reasserts the setup-bound exact runtime, explicit selector and installed
+compound skill. It exposes the child's hook session as `worker_id` and
+`session_id`, under this binding's verified mapping to the native `agentId`.
+Keep the original `parent_session_id` from the explicit parent
+handoff, never from the child's hook session. Missing or conflicting setup
+binding/handoff is a visible prerequisite, not permission to use the global
+default or another profile. Bound context grants no authorization or ownership:
+the worker must still claim an eligible run with `automatic: true`. Follow the
+compound skill for parent-owned consumer/publication context and late identity
+recording; the hook does not replace that handoff.
 
-The scheduled invocation must start `copilot -p` in the intended repository
-and direct it to the installed `knowledge-compound` skill with the absolute
-launcher plus pinned registry/profile or direct config selector. Keep the
-prompt short and stable:
+If a future installed version exposes durable native local scheduling, inspect
+that capability, reuse the matching `agent-knowledge-compound:<workspace_id>`
+owner and verify it before selecting `local-schedule`. Never run an independent
+fallback alongside it. Existing external jobs remain user-owned; this setup
+does not create workflows, cron/systemd jobs or hidden background processes.
 
-~~~text
-Run the installed knowledge-compound skill using
-/work/knowledge/.agent-knowledge-venv/bin/agent-knowledge with
---settings /work/local/profiles.yaml --profile work on every configured call.
-Process pending signals, follow its publication and drain policy, and report
-the run, dispositions and retained/drained inputs. Do not merge PRs or
-force-push. Marker: agent-knowledge-compound:workspace:example
-~~~
+Use the setup-generated local CLI launcher when a profile declares external
+credentials. It supplies the provider's supported Bash activation and redaction
+behavior for that new session. The knowledge selector does not activate or
+switch credentials. Keep unrelated blank mappings visible and verify access
+required by publication without borrowing another account or exposing values.
 
-Pin credentials required by the scheduled work through the chosen durable
-provider surface. Unrelated unfinished profile mappings do not block local
-compounding; required publication authentication does. GitHub Actions
-can map Actions secrets or an Actions environment; Copilot cloud automation
-uses repository or organization Agents secrets and variables. Never copy a
-credential value into the prompt. A knowledge profile selects routing and does
-not change credentials already loaded into a running harness.
-
-Run the exact invocation once before enabling recurrence. Verify configured
-`doctor`, installed skill discovery, the activity record and the retained or
-drained inputs. Keep native pause/remove controls visible. If no durable surface
-is authorized, report Copilot automation as `provider-limited` and leave the
-workspace and signals unchanged. Do not silently create cron, launchctl, a
-daemon or a shell-startup mutation.
+The [shared trigger procedure](local-compounding.md#pause-remove-and-report)
+owns pause/remove controls, shared-store alias coordination, retries and the
+rolling interval. Local execution may publish reviewed GitHub PRs according to
+the skill's policy; it never merges automatically.

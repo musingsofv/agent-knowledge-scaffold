@@ -83,7 +83,7 @@ native `sessionStart` plus `userPromptTransformed`, so Copilot also receives
 reflection on each model-facing user prompt. Native `sessionStart` handles a
 Copilot resume. Copilot has no model-visible event after in-session compaction;
 always-on discovery instructions remain and the next user prompt receives the
-reflection reminder only. The package does not install a scheduler.
+reflection reminder and, when configured and due, a compounding delegation. The package does not install a scheduler.
 
 The hook is package-owned and idempotent. APM first records one
 `agent-knowledge-hook` marker for each selected provider; `knowledge-setup`
@@ -98,8 +98,9 @@ primitives. Re-enable it by installing the package source again with
 `apm install --target codex,claude,copilot --no-policy /path/to/knowledge-agent-pack`.
 The hook emits a short discovery/reflection reminder, the normalized provider
 name and the exact opaque provider session ID. The agent copies those values
-into `origin.harness` and `origin.session_id`; the hook never reads knowledge
-or signals. The installed guide and skills remain the authoritative
+into `origin.harness` and `origin.session_id`. Discovery/reflection never reads
+knowledge or signals. The separately configured compounding check reads bounded
+coordination and inbox metadata, never signal or knowledge bodies. The installed guide and skills remain the authoritative
 instructions.
 
 When a profile declares an external environment, configure its label, private
@@ -119,9 +120,8 @@ One harness session uses at most one credential profile. To switch, ask or run
 `knowledge-setup` for the target profile and then start a new session using its
 newly reported action. Passing another `--profile` changes knowledge selection
 only, and starting a new Claude session alone does not rebind the configured
-credential profile. Use separate consumer/project configurations or
-provider-native cloud environments for simultaneous tasks that require
-different credential profiles.
+credential profile. Use separately launched local sessions and their verified consumer/profile
+bindings for simultaneous tasks that require different credential profiles.
 
 Profile users run `agent-knowledge --profile <label> doctor`, adding
 `--settings /path/to/config.yaml` for a non-default registry. Direct workspace
@@ -141,9 +141,9 @@ scaffold-local runtime. Managed setup compiles all three supported APM targets
 (`codex`, `claude`, `copilot`) and binds their hooks by default. An explicit
 consumer target restriction is preserved; repository-owned setup uses the
 prepare/install/compile/bind sequence above. It configures durable
-automation only through a supported, authorized provider surface; unavailable,
-unauthenticated or session-only scheduling is reported without asking for a
-different target subset. It uses a daily local-time cadence by default where
+local automation through a supported durable native surface when available,
+otherwise through the prompt-hook fallback. Authentication and trust failures
+remain readiness diagnostics; session-only timers are not durable scheduling. It uses a daily local-time cadence by default where
 durable scheduling is available. Fresh setup defaults to GitHub PR publication
 using the canonical knowledge checkout's verified remote and default branch,
 with prefix `knowledge/`. It includes that destination in the setup proposal and
@@ -190,17 +190,32 @@ automation, along with installed skills and the dependencies the run actually
 uses. Unrelated unfinished service credentials do not block local compounding;
 required publication credentials do.
 
-The skill configures one durable automation owner per signal store where the
-provider offers an authorized persistent surface. Its marker is
-`agent-knowledge-compound:<workspace_id>`. Codex Scheduled is supported by a
-provider reference. Copilot CLI `/every` and `/after` are session-scoped and do
-not qualify as unattended daily automation; the Copilot reference recommends an
-explicitly authorized external scheduler invoking `copilot -p` or a cloud
-automation. The task invokes knowledge-compound with the absolute launcher,
-registry and explicit profile, or a direct configuration path, and exposes
-pause/remove controls. It never relies on the global default. Run it once
-immediately to verify the installed launcher and activity log; do not replace a
-provider task with a hidden daemon or background loop.
+The skill configures one trigger owner per shared signal store, including
+profile aliases and multiple providers. The owner marker is
+`agent-knowledge-compound:<workspace_id>`. It prefers a verified durable local
+schedule, such as an available Codex desktop schedule. Codex CLI does not
+inherit desktop scheduling; Claude `/loop` and Copilot `/every` or `/after`
+are session-only timers. Without a durable local surface, setup binds the
+conditional prompt fallback. It preserves explicit manual/disabled choices.
+
+The fallback checks the existing `ai/signals/compound-activity.jsonl` and
+bounded inbox metadata. When due, it asks the main agent to delegate the
+installed skill, retaining the exact selector and available worker identities.
+The worker atomically rechecks before starting; a redundant worker exits.
+Successful checks use a rolling 24-hour interval, failures use a bounded retry,
+and an empty inbox does not delay new signals. This is opportunistic local
+execution, not a promise to run while the harness is closed. The setup report
+separates trigger, hooks, runtime and credential readiness and provides
+pause/remove controls and explicit disable directions. See
+[local compounding](.apm/skills/knowledge-setup/references/local-compounding.md).
+
+For an existing container image, keep its base, tools and nonroot harness user.
+Install the pinned runtime during image build, then bind after mounts exist
+with `--runtime-mode existing --portable-hooks`. Verification requires the
+matching wheel or source payload and works without `uv` or writable venv files.
+The wheel does not contain the setup skill; install its matching APM package.
+Use an environment-local registry and persistent storage with proven locking.
+See [container setup](.apm/skills/knowledge-setup/references/containers.md).
 
 ## Compounding
 

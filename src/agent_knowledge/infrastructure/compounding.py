@@ -14,8 +14,8 @@ import re
 import secrets
 import stat
 from collections.abc import Mapping
-from dataclasses import dataclass
-from datetime import UTC, datetime
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from time import monotonic
 
@@ -26,8 +26,14 @@ from agent_knowledge.domain.compounding import (
     drainable_snapshots,
     parse_compound_request,
 )
+from agent_knowledge.domain.configuration import (
+    CompoundTrigger,
+    compound_trigger_view,
+    parse_compound_trigger,
+)
 from agent_knowledge.domain.schema import parse_signal
 from agent_knowledge.domain.signals import validate_signal_origin
+from agent_knowledge.domain.usage import read_utc_timestamp
 from agent_knowledge.domain.validation import ValidationError
 
 from .compound_evidence import (
@@ -53,7 +59,7 @@ from .errors import AdapterError
 from .filesystem import _identity, open_directory, read_bytes
 from .origin import resolve_project
 from .signals import signal_bucket
-from .usage import append_event, write_artifact
+from .usage import append_event, ensure_directory, write_artifact
 
 ACTIVITY_SCHEMA = "compound-activity.v1"
 ACTIVITY_MAX_BYTES = 1_048_576
@@ -77,6 +83,14 @@ class ActivityEvent:
     outcome: str | None = None
     dispositions: tuple[SignalDisposition, ...] = ()
     drained: tuple[str, ...] = ()
+    automatic: bool = False
+    worker_id: str | None = None
+    parent_session_id: str | None = None
+    recovery_of: str | None = None
+    completion: str | None = None
+    trigger: CompoundTrigger | None = None
+    configured_at: str | None = None
+    recorded_at: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,6 +99,18 @@ class ActivityState:
 
     events: tuple[ActivityEvent, ...]
     active_runs: tuple[ActivityEvent, ...]
+    trigger: CompoundTrigger | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class CompoundDue:
+    """A bounded advisory result, never a reservation or permission to mutate."""
+
+    due: bool
+    reason: str
+    next_due_at: str | None = None
+    active_runs: tuple[ActivityEvent, ...] = ()
+    inbox_probe: str = "not-checked"
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,7 +146,10 @@ def read_activity_log(path: Path) -> ActivityState:
         )
     events: list[ActivityEvent] = []
     starts: dict[str, ActivityEvent] = {}
+    workers: dict[str, ActivityEvent] = {}
     ended: set[str] = set()
+    trigger = None
+    last_timestamp: datetime | None = None
     for number, line in enumerate(raw.splitlines(), start=1):
         if not line.strip():
             raise ValidationError(
@@ -133,7 +162,26 @@ def read_activity_log(path: Path) -> ActivityState:
             raise ValidationError(
                 error.code, f"{path}:{number}:{error.path}", error.message
             ) from error
+        timestamp = _event_timestamp(event)
+        if last_timestamp is not None and timestamp < last_timestamp:
+            raise ValidationError(
+                "invalid-activity-log",
+                str(path),
+                "Activity timestamps move backwards; inspect clock history.",
+            )
+        last_timestamp = timestamp
         events.append(event)
+        if event.event == "trigger":
+            trigger = event.trigger
+            continue
+        if event.event == "worker":
+            prior = starts.get(event.run_id) or workers.get(event.run_id)
+            if prior is not None:
+                effective = _merge_worker(prior, event)
+                if event.run_id in starts:
+                    starts[event.run_id] = effective
+            workers[event.run_id] = event
+            continue
         if event.event == "start":
             if event.run_id in starts:
                 raise ValidationError(
@@ -156,6 +204,45 @@ def read_activity_log(path: Path) -> ActivityState:
                     f"{path}:{number}.workspace_id",
                     "Start and end workspace IDs must match.",
                 )
+            if (
+                started.automatic,
+                started.worker_id,
+                started.parent_session_id,
+                started.recovery_of,
+                started.harness,
+                started.session_id,
+                started.automation_id,
+            ) != (
+                event.automatic,
+                event.worker_id,
+                event.parent_session_id,
+                event.recovery_of,
+                event.harness,
+                event.session_id,
+                event.automation_id,
+            ):
+                raise ValidationError(
+                    "invalid-activity-log",
+                    f"{path}:{number}",
+                    "Run identity must match across the terminal pair.",
+                )
+            assert started.started_at is not None and event.ended_at is not None
+            if read_utc_timestamp(event.ended_at, "ended_at") < read_utc_timestamp(
+                started.started_at, "started_at"
+            ):
+                raise ValidationError(
+                    "invalid-activity-log", str(path), "End cannot precede start."
+                )
+            if event.completion in {"completed", "deferred"} and {
+                item.id for item in started.selected
+            } != {item.signal_id for item in event.dispositions}:
+                raise ValidationError(
+                    "invalid-activity-log", str(path), "Terminal dispositions are incomplete."
+                )
+            if event.completion == "empty" and (started.selected or event.dispositions):
+                raise ValidationError(
+                    "invalid-activity-log", str(path), "Empty completion contains inputs."
+                )
             if event.run_id in ended:
                 raise ValidationError(
                     "invalid-activity-log",
@@ -164,7 +251,160 @@ def read_activity_log(path: Path) -> ActivityState:
                 )
             ended.add(event.run_id)
     active = tuple(event for run_id, event in starts.items() if run_id not in ended)
-    return ActivityState(tuple(events), active)
+    return ActivityState(tuple(events), active, trigger)
+
+
+def configure_trigger(
+    workspace: Workspace, *, expected: CompoundTrigger | None = None
+) -> CompoundTrigger:
+    """Register one shared-store agreement; compare-and-swap explicit replacements."""
+    configured = workspace.definition.setup.compounding if workspace.definition.setup else None
+    if configured is None:
+        raise ValidationError(
+            "trigger-unconfigured",
+            "setup.compounding",
+            "Configure the local trigger before registration.",
+        )
+    path = activity_path(workspace)
+    with lifecycle_lock(path):
+        _rollover_activity(workspace, path)
+        state = read_activity_log(path)
+        if not workspace_is_current(workspace):
+            raise AdapterError(
+                "workspace-changed",
+                str(workspace.path),
+                "Configuration changed before trigger registration.",
+            )
+        ensure_directory(workspace.receipts.directory)
+        if state.trigger == configured:
+            return configured
+        if state.active_runs:
+            raise AdapterError(
+                "compound-active", str(path), "Inspect unfinished work before changing its trigger."
+            )
+        if state.trigger != expected:
+            raise ValidationError(
+                "trigger-conflict",
+                "expected_trigger",
+                "Shared-store trigger differs; inspect and explicitly reconcile the "
+                "recorded agreement.",
+            )
+        _append(
+            path,
+            _event_mapping(
+                ActivityEvent(
+                    event="trigger",
+                    run_id="",
+                    workspace_id=workspace.definition.workspace_id,
+                    active=False,
+                    trigger=configured,
+                    configured_at=_now(),
+                )
+            ),
+        )
+        return configured
+
+
+def compound_due(workspace: Workspace) -> CompoundDue:
+    """Perform a bounded nonblocking advisory check without claim-body reads."""
+    try:
+        path = activity_path(workspace)
+        with lifecycle_lock(path, blocking=False):
+            return _due_locked(workspace, read_activity_log(path))
+    except (AdapterError, ValidationError, OSError) as error:
+        code = error.code if isinstance(error, AdapterError | ValidationError) else "io-unavailable"
+        return CompoundDue(False, "busy" if code == "usage-lock-busy" else code)
+
+
+def _due_locked(workspace: Workspace, state: ActivityState) -> CompoundDue:
+    configured = workspace.definition.setup.compounding if workspace.definition.setup else None
+    if configured is None or state.trigger is None:
+        return CompoundDue(False, "unconfigured")
+    if configured != state.trigger:
+        return CompoundDue(False, "trigger-conflict")
+    if configured.mode != "prompt":
+        return CompoundDue(False, configured.mode)
+    if state.active_runs:
+        return CompoundDue(False, "active", active_runs=state.active_runs)
+    now = read_utc_timestamp(_now(), "clock")
+    timestamps = [
+        read_utc_timestamp(timestamp, "activity.timestamp")
+        for event in state.events
+        for timestamp in (event.started_at, event.ended_at, event.configured_at, event.recorded_at)
+        if timestamp is not None
+    ]
+    if any(timestamp > now for timestamp in timestamps):
+        return CompoundDue(False, "clock-regressed")
+    # Retain the completed-check interval even when a later explicit failed
+    # attempt adds a retry bound. A subsequent completion supersedes failures.
+    relevant = [
+        event
+        for event in state.events
+        if event.event == "end" and event.completion in {"completed", "deferred", "failed"}
+    ]
+    completed = next(
+        (event for event in reversed(relevant) if event.completion in {"completed", "deferred"}),
+        None,
+    )
+    deadlines: list[tuple[datetime, str]] = []
+    if completed is not None:
+        deadlines.append(
+            (
+                read_utc_timestamp(completed.ended_at, "ended_at")
+                + timedelta(seconds=configured.interval_seconds),
+                "recent",
+            )
+        )
+    if relevant and relevant[-1].completion == "failed":
+        deadlines.append(
+            (
+                read_utc_timestamp(relevant[-1].ended_at, "ended_at")
+                + timedelta(seconds=configured.retry_seconds),
+                "retry-wait",
+            )
+        )
+    if deadlines:
+        next_due, reason = max(deadlines)
+        if now < next_due:
+            return CompoundDue(
+                False,
+                reason,
+                next_due_at=next_due.isoformat(timespec="seconds").replace("+00:00", "Z"),
+            )
+    try:
+        with open_directory(workspace.receipts.directory) as descriptor:
+            if not os.access(".", os.W_OK | os.X_OK, dir_fd=descriptor):
+                return CompoundDue(False, "receipts-unavailable")
+    except (AdapterError, OSError):
+        return CompoundDue(False, "receipts-unavailable")
+    probe = _probe_inbox(workspace)
+    return CompoundDue(probe != "empty", "empty" if probe == "empty" else "due", inbox_probe=probe)
+
+
+def _probe_inbox(workspace: Workspace, *, budget: int = 128) -> str:
+    """Bound metadata examination; unknown candidates belong to the worker."""
+    storage = validate_signal_storage(workspace)
+    assert storage is not None
+    project = resolve_project(workspace)
+    buckets = [signal_bucket(storage, None)]
+    if project is not None:
+        buckets.append(signal_bucket(storage, project))
+    seen = 0
+    for bucket in buckets:
+        try:
+            with open_directory(bucket) as descriptor, os.scandir(descriptor) as entries:
+                for entry in entries:
+                    seen += 1
+                    if seen > budget:
+                        return "inconclusive"
+                    if entry.name.endswith((".md", ".yaml", ".yml")):
+                        return "potential"
+        except AdapterError as error:
+            if error.code not in {"file-missing", "directory-missing"}:
+                raise
+        except FileNotFoundError:
+            continue
+    return "empty"
 
 
 def start_run(
@@ -175,13 +415,33 @@ def start_run(
     session_id: str | None,
     automation_id: str | None,
     workspace_id: str,
-) -> ActivityEvent:
+    automatic: bool = False,
+    worker_id: str | None = None,
+    parent_session_id: str | None = None,
+    recovery_of: str | None = None,
+) -> ActivityEvent | CompoundDue:
     """Validate and archive exact selected inputs before recording an active run."""
     began = monotonic()
     path = activity_path(workspace)
     with lifecycle_lock(path):
-        _rollover_activity(workspace, path)
         state = read_activity_log(path)
+        if automatic:
+            if not workspace_is_current(workspace):
+                return CompoundDue(False, "workspace-changed")
+            eligibility = _due_locked(workspace, state)
+            if not eligibility.due:
+                return eligibility
+        if recovery_of is not None:
+            prior = resolve_run(workspace, recovery_of)
+            if any(event.run_id == prior.run_id for event in state.active_runs) or not any(
+                record.get("operation") == "compound.finish"
+                for record in evidence_records(workspace, prior.run_id)
+            ):
+                raise ValidationError(
+                    "recovery-unresolved",
+                    "recovery_of",
+                    "Reconcile and finish the prior run before recovery.",
+                )
         if state.active_runs:
             active_ids = ", ".join(event.run_id for event in state.active_runs)
             raise AdapterError(
@@ -196,6 +456,7 @@ def start_run(
                 "workspace_id",
                 "The run workspace ID must equal the selected configuration.",
             )
+        _rollover_activity(workspace, path)
         storage = validate_signal_storage(workspace)
         assert storage is not None
         project = resolve_project(workspace)
@@ -227,6 +488,10 @@ def start_run(
             session_id=session_id,
             automation_id=automation_id,
             selected=selected,
+            automatic=automatic,
+            worker_id=worker_id,
+            parent_session_id=parent_session_id,
+            recovery_of=recovery_of,
         )
         artifacts: list[dict[str, object]] = []
         for snapshot, data in inputs:
@@ -296,7 +561,105 @@ def resolve_run(workspace: Workspace, run_id: str) -> ActivityEvent:
         raise AdapterError(
             "compound-start-incomplete", str(path), "Run start evidence is incomplete."
         )
+    for record in records:
+        if record.get("operation") == "compound.worker":
+            attachment = record.get("worker")
+            if not isinstance(attachment, Mapping):
+                raise ValidationError(
+                    "invalid-worker-record", str(path), "Worker evidence is malformed."
+                )
+            worker = _event_from_mapping(attachment, str(path))
+            if worker.event != "worker":
+                raise ValidationError(
+                    "invalid-worker-record", str(path), "Expected worker metadata."
+                )
+            event = _merge_worker(event, worker)
     return event
+
+
+def record_worker(
+    workspace: Workspace,
+    *,
+    run_id: str,
+    worker_id: str,
+    parent_session_id: str | None = None,
+    harness: str | None = None,
+) -> tuple[ActivityEvent, bool]:
+    """Attach a late native worker handle without changing lifecycle or outcomes."""
+    began = monotonic()
+    path = activity_path(workspace)
+    with lifecycle_lock(path):
+        state = read_activity_log(path)
+        original = resolve_run(workspace, run_id)
+        active = next((event for event in state.active_runs if event.run_id == run_id), None)
+        records = evidence_records(workspace, run_id)
+        if active is None and not any(
+            record.get("operation") == "compound.finish" for record in records
+        ):
+            raise AdapterError(
+                "compound-run-missing",
+                str(path),
+                "Run coordination is incomplete; inspect before attaching a worker.",
+            )
+        worker = ActivityEvent(
+            event="worker",
+            run_id=run_id,
+            workspace_id=original.workspace_id,
+            active=False,
+            recorded_at=_now(),
+            worker_id=worker_id,
+            parent_session_id=parent_session_id
+            if parent_session_id is not None
+            else original.parent_session_id,
+            harness=harness if harness is not None else original.harness,
+        )
+        # Reuse the public strict identity codec before persisting caller metadata.
+        worker = _event_from_mapping(_event_mapping(worker), str(path))
+        effective = _merge_worker(original, worker)
+        if effective == original and (active is None or active == effective):
+            return effective, False
+        if state.events and _event_timestamp(worker) < _event_timestamp(state.events[-1]):
+            raise AdapterError(
+                "clock-regressed",
+                str(path),
+                "Clock precedes recorded activity; inspect before writing.",
+            )
+        _rollover_activity(workspace, path)
+        if effective != original:
+            append_compound_event(
+                workspace,
+                run_id,
+                "compound.worker",
+                context=_context(original),
+                payload={"worker": _event_mapping(worker)},
+                began=began,
+            )
+        # If an earlier attachment archived successfully but its activity append
+        # was interrupted, the identical retry repairs only that metadata append.
+        _append(path, _event_mapping(worker))
+        return effective, True
+
+
+def _merge_worker(original: ActivityEvent, worker: ActivityEvent) -> ActivityEvent:
+    if original.run_id != worker.run_id or original.workspace_id != worker.workspace_id:
+        raise ValidationError(
+            "worker-context-mismatch", "run_id", "Worker metadata belongs to another run."
+        )
+    for field in ("harness", "worker_id", "parent_session_id"):
+        prior = getattr(original, field)
+        supplied = getattr(worker, field)
+        if prior is not None and supplied != prior:
+            raise ValidationError(
+                "worker-context-mismatch",
+                field,
+                "Worker metadata conflicts with the recorded identity.",
+            )
+    return replace(
+        original,
+        harness=worker.harness,
+        worker_id=worker.worker_id,
+        parent_session_id=worker.parent_session_id,
+    )
 
 
 def finish_run(
@@ -305,12 +668,48 @@ def finish_run(
     run_id: str,
     outcome: str,
     dispositions: tuple[SignalDisposition, ...],
+    completion: str | None = None,
 ) -> ActivityEvent:
     """Record agent-reported outcome while deriving actual drainage from tool evidence."""
     began = monotonic()
     path = activity_path(workspace)
     with lifecycle_lock(path):
         active = _active_run(workspace, run_id)
+        if active.automatic and completion is None:
+            raise ValidationError(
+                "missing-field", "completion", "Automatic runs require a terminal classification."
+            )
+        if completion is not None and completion not in {
+            "completed",
+            "deferred",
+            "failed",
+            "empty",
+        }:
+            raise ValidationError("invalid-value", "completion", "Unknown terminal classification.")
+        selected_ids = {item.id for item in active.selected}
+        disposition_ids = {item.signal_id for item in dispositions}
+        if completion in {"completed", "deferred"} and selected_ids != disposition_ids:
+            raise ValidationError(
+                "incomplete-dispositions",
+                "dispositions",
+                "Classified completion requires exactly one disposition per selected input.",
+            )
+        if completion == "empty" and (active.selected or dispositions):
+            raise ValidationError(
+                "invalid-completion",
+                "completion",
+                "Empty completion requires no selected inputs or dispositions.",
+            )
+        ended_at = _now()
+        assert active.started_at is not None
+        if read_utc_timestamp(ended_at, "ended_at") < read_utc_timestamp(
+            active.started_at, "started_at"
+        ):
+            raise AdapterError(
+                "clock-regressed",
+                str(path),
+                "Clock precedes the active run; inspect before finishing.",
+            )
         records = evidence_records(workspace, run_id)
         drained = _recorded_drained(records)
         retained = sorted({snapshot.id for snapshot in active.selected} - set(drained))
@@ -319,13 +718,18 @@ def finish_run(
             run_id=run_id,
             workspace_id=active.workspace_id,
             active=False,
-            ended_at=_now(),
+            ended_at=ended_at,
             harness=active.harness,
             session_id=active.session_id,
             automation_id=active.automation_id,
             outcome=outcome,
             dispositions=dispositions,
             drained=drained,
+            automatic=active.automatic,
+            worker_id=active.worker_id,
+            parent_session_id=active.parent_session_id,
+            recovery_of=active.recovery_of,
+            completion=completion,
         )
         existing_finish = next(
             (record for record in records if record.get("operation") == "compound.finish"), None
@@ -345,6 +749,7 @@ def finish_run(
             payload={
                 "agent_report": {
                     "outcome": outcome,
+                    "completion": completion,
                     "verification": "agent-reported",
                     "dispositions": [disposition_view(item) for item in dispositions],
                 },
@@ -628,8 +1033,62 @@ def _event_from_mapping(value: Mapping[str, object], path: str) -> ActivityEvent
         raise ValidationError(
             "unsupported-schema", f"{path}.schema", f"Expected {ACTIVITY_SCHEMA}."
         )
+    if event == "trigger":
+        if set(value) != {"schema", "event", "workspace_id", "trigger", "configured_at"}:
+            raise ValidationError("invalid-activity-log", path, "Invalid trigger record fields.")
+        configured_at = _text(value.get("configured_at"), f"{path}.configured_at")
+        read_utc_timestamp(configured_at, f"{path}.configured_at")
+        return ActivityEvent(
+            event="trigger",
+            run_id="",
+            workspace_id=_text(value.get("workspace_id"), f"{path}.workspace_id"),
+            active=False,
+            trigger=parse_compound_trigger(value.get("trigger")),
+            configured_at=configured_at,
+        )
+    if event == "worker":
+        required = {
+            "schema",
+            "event",
+            "run_id",
+            "workspace_id",
+            "recorded_at",
+            "worker_id",
+            "harness",
+        }
+        if not required <= set(value) or set(value) - required - {"parent_session_id"}:
+            raise ValidationError("invalid-activity-log", path, "Invalid worker record fields.")
+        recorded_at = _text(value.get("recorded_at"), f"{path}.recorded_at")
+        read_utc_timestamp(recorded_at, f"{path}.recorded_at")
+        identity = parse_compound_request(
+            {
+                "action": "record-worker",
+                "run_id": value["run_id"],
+                "worker_id": value["worker_id"],
+                "parent_session_id": value.get("parent_session_id"),
+            }
+        )
+        harness = _text(value.get("harness"), f"{path}.harness")
+        if harness not in {"codex", "claude", "copilot"}:
+            raise ValidationError(
+                "invalid-activity-log",
+                path,
+                "Worker attachment requires the exact supported provider.",
+            )
+        return ActivityEvent(
+            event="worker",
+            run_id=_text(value["run_id"], f"{path}.run_id"),
+            workspace_id=_text(value["workspace_id"], f"{path}.workspace_id"),
+            active=False,
+            recorded_at=recorded_at,
+            harness=harness,
+            worker_id=identity.worker_id,
+            parent_session_id=identity.parent_session_id,
+        )
     if event not in {"start", "end"}:
-        raise ValidationError("invalid-activity-log", f"{path}.event", "Expected start or end.")
+        raise ValidationError(
+            "invalid-activity-log", f"{path}.event", "Expected start, end, trigger or worker."
+        )
     allowed = {
         "schema",
         "configuration_route",
@@ -646,6 +1105,11 @@ def _event_from_mapping(value: Mapping[str, object], path: str) -> ActivityEvent
         "outcome",
         "dispositions",
         "drained",
+        "automatic",
+        "worker_id",
+        "parent_session_id",
+        "recovery_of",
+        "completion",
     }
     unknown = set(value) - allowed
     if unknown:
@@ -667,6 +1131,19 @@ def _event_from_mapping(value: Mapping[str, object], path: str) -> ActivityEvent
         )
     if event == "end" and not ended_at:
         raise ValidationError("invalid-activity-log", f"{path}.ended_at", "End requires ended_at.")
+    for timestamp in (started_at, ended_at):
+        if timestamp is not None:
+            read_utc_timestamp(timestamp, path)
+    automatic = value.get("automatic", False)
+    if not isinstance(automatic, bool):
+        raise ValidationError("invalid-activity-log", path, "automatic must be boolean.")
+    completion = _optional_text(value.get("completion"), f"{path}.completion")
+    if completion is not None and completion not in {"completed", "deferred", "failed", "empty"}:
+        raise ValidationError("invalid-activity-log", path, "Unknown terminal classification.")
+    if event == "start" and completion is not None:
+        raise ValidationError("invalid-activity-log", path, "Start cannot have a completion.")
+    if event == "end" and automatic and completion is None:
+        raise ValidationError("invalid-activity-log", path, "Automatic end requires completion.")
     selected = _snapshots(value.get("selected", []), f"{path}.selected")
     dispositions = _dispositions(value.get("dispositions", []), f"{path}.dispositions")
     drained = _strings(value.get("drained", []), f"{path}.drained")
@@ -688,6 +1165,13 @@ def _event_from_mapping(value: Mapping[str, object], path: str) -> ActivityEvent
             "invalid-activity-log", f"{path}.drained", "Start events cannot contain drained IDs."
         )
     return ActivityEvent(
+        automatic=automatic,
+        completion=completion,
+        worker_id=_optional_text(value.get("worker_id"), f"{path}.worker_id"),
+        parent_session_id=_optional_text(
+            value.get("parent_session_id"), f"{path}.parent_session_id"
+        ),
+        recovery_of=_optional_text(value.get("recovery_of"), f"{path}.recovery_of"),
         event=str(event),
         run_id=run_id,
         workspace_id=workspace_id,
@@ -705,6 +1189,28 @@ def _event_from_mapping(value: Mapping[str, object], path: str) -> ActivityEvent
 
 
 def _event_mapping(event: ActivityEvent) -> dict[str, object]:
+    if event.event == "trigger":
+        assert event.trigger is not None
+        return {
+            "schema": ACTIVITY_SCHEMA,
+            "event": "trigger",
+            "workspace_id": event.workspace_id,
+            "trigger": compound_trigger_view(event.trigger),
+            "configured_at": event.configured_at,
+        }
+    if event.event == "worker":
+        result: dict[str, object] = {
+            "schema": ACTIVITY_SCHEMA,
+            "event": "worker",
+            "run_id": event.run_id,
+            "workspace_id": event.workspace_id,
+            "recorded_at": event.recorded_at,
+            "harness": event.harness,
+            "worker_id": event.worker_id,
+        }
+        if event.parent_session_id is not None:
+            result["parent_session_id"] = event.parent_session_id
+        return result
     value: dict[str, object] = {
         "schema": ACTIVITY_SCHEMA,
         "event": event.event,
@@ -719,9 +1225,15 @@ def _event_mapping(event: ActivityEvent) -> dict[str, object]:
         ("session_id", event.session_id),
         ("automation_id", event.automation_id),
         ("outcome", event.outcome),
+        ("completion", event.completion),
+        ("worker_id", event.worker_id),
+        ("parent_session_id", event.parent_session_id),
+        ("recovery_of", event.recovery_of),
     ):
         if item is not None:
             value[key] = item
+    if event.automatic:
+        value["automatic"] = True
     if event.selected:
         value["selected"] = [
             {"id": item.id, "path": item.path, "fingerprint": item.fingerprint}
@@ -734,8 +1246,27 @@ def _event_mapping(event: ActivityEvent) -> dict[str, object]:
     return value
 
 
+def _event_timestamp(event: ActivityEvent) -> datetime:
+    timestamp = (
+        event.configured_at
+        if event.event == "trigger"
+        else (event.started_at if event.event == "start" else event.ended_at)
+    )
+    if event.event == "worker":
+        timestamp = event.recorded_at
+    return read_utc_timestamp(timestamp, "activity.timestamp")
+
+
 def _append(path: Path, value: Mapping[str, object]) -> None:
     """Serialize the small coordination append separately from analytics evidence."""
+    event = _event_from_mapping(value, str(path))
+    state = read_activity_log(path)
+    if state.events and _event_timestamp(event) < _event_timestamp(state.events[-1]):
+        raise AdapterError(
+            "clock-regressed",
+            str(path),
+            "Clock precedes recorded activity; inspect before writing.",
+        )
     payload_size = len(json.dumps(value).encode())
     if payload_size > ACTIVITY_MAX_BYTES // 4:
         raise AdapterError(
@@ -758,8 +1289,34 @@ def _rollover_activity(workspace: Workspace, path: Path) -> None:
         return
     state = read_activity_log(path)
     unresolved = {event.run_id for event in state.active_runs}
-    # Copy all history first; retaining unmatched starts in the live log is enough
-    # for coordination. Completed but unresolved evidence remains in its run archive.
+    # Retain terminal pairs needed for cadence/retry and the most recent empty/manual
+    # check for clock safety, plus the latest shared-store trigger agreement.
+    latest_end = next((event for event in reversed(state.events) if event.event == "end"), None)
+    latest_relevant = next(
+        (
+            event
+            for event in reversed(state.events)
+            if event.event == "end" and event.completion in {"completed", "deferred", "failed"}
+        ),
+        None,
+    )
+    latest_completed = next(
+        (
+            event
+            for event in reversed(state.events)
+            if event.event == "end" and event.completion in {"completed", "deferred"}
+        ),
+        None,
+    )
+    retained_ids = unresolved | {
+        event.run_id for event in (latest_end, latest_relevant, latest_completed) if event
+    }
+    latest_trigger = next(
+        (event for event in reversed(state.events) if event.event == "trigger"), None
+    )
+    latest_worker = next(
+        (event for event in reversed(state.events) if event.event == "worker"), None
+    )
     archive = (
         workspace.receipts.directory / "coordination" / (hashlib.sha256(raw).hexdigest() + ".jsonl")
     )
@@ -767,7 +1324,9 @@ def _rollover_activity(workspace: Workspace, path: Path) -> None:
     retained = b"".join(
         (json.dumps(_event_mapping(event), sort_keys=True, separators=(",", ":")) + "\n").encode()
         for event in state.events
-        if event.run_id in unresolved
+        if (event.event != "trigger" and event.run_id in retained_ids)
+        or event is latest_trigger
+        or event is latest_worker
     )
     if len(retained) >= ACTIVITY_MAX_BYTES // 2:
         raise AdapterError(
@@ -993,6 +1552,9 @@ __all__ = [
     "ACTIVITY_SCHEMA",
     "ActivityEvent",
     "ActivityState",
+    "CompoundDue",
+    "compound_due",
+    "configure_trigger",
     "DrainReport",
     "activity_path",
     "drain_signals",
@@ -1000,5 +1562,6 @@ __all__ = [
     "finish_run",
     "read_activity_log",
     "resolve_run",
+    "record_worker",
     "start_run",
 ]

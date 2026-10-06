@@ -638,7 +638,11 @@ def test_rollover_preserves_unresolved_run_evidence_and_context(
     monkeypatch.setattr(compounding, "ACTIVITY_MAX_BYTES", log_size * 3)
     second_id = begin(loaded, selected)
     assert second_id != first_id
-    assert [item.run_id for item in read_activity_log(activity_path(loaded)).events] == [second_id]
+    assert [item.run_id for item in read_activity_log(activity_path(loaded)).events] == [
+        first_id,
+        first_id,
+        second_id,
+    ]
     assert compounding.resolve_run(loaded, first_id).run_id == first_id
     assert evidence_records(loaded, first_id)[-1]["tool_result"]["unresolved"] is True
     assert list((loaded.receipts.directory / "coordination").glob("*.jsonl"))

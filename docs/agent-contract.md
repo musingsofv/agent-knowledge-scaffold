@@ -221,7 +221,7 @@ doctor command.
 One local consumer hook binds one credential profile for all new Claude
 sessions. A profile written into a recurring-task prompt selects knowledge, not
 credentials. Concurrent Claude tasks needing different profiles require
-separate consumer/project configurations or provider-native cloud environments.
+separately launched local sessions with verified profile bindings.
 
 Supported overrides are `applicable_scopes`, `sources`, `signal_storage`,
 `receipts` and `setup`. Known map fields merge; lists replace entirely. For
@@ -626,6 +626,142 @@ removals and retained inputs. Never remove or move inbox files yourself. Archive
 are evidence, not pending signals or searchable canonical knowledge. Finish
 records an agent-reported outcome; actual drain counts come from prior tool events.
 Publication claims remain agent-reported unless independently checked.
+
+### Local trigger agreement and delegated workers
+
+The setup skill selects one local trigger for a shared signal store. Configure
+`setup.compounding` in the workspace or an explicit profile override:
+
+```yaml
+setup:
+  compounding:
+    mode: prompt
+    owner: shared-workspace-compounding
+    interval_seconds: 86400
+    retry_seconds: 3600
+```
+
+Modes are `disabled`, `manual`, `local-schedule` and `prompt`. Missing configuration
+is unconfigured, never implicit permission. The owner is a stable logical name for
+this shared store, not a profile spelling, provider or container path. All profile
+aliases/providers that share storage must agree. Both intervals accept integer
+seconds from 3600 through 2592000. A prompt interval is rolling elapsed time;
+native local schedules retain their own cadence and timezone.
+
+Run the following with the same explicit selector on every invocation:
+
+```bash
+agent-knowledge --profile example compound --request-file - <<'YAML'
+action: configure-trigger
+YAML
+agent-knowledge --profile example compound --request-file - <<'YAML'
+action: due
+YAML
+```
+
+`configure-trigger` prepares the validated receipt directory and records the
+selected configuration in the existing `ai/signals/compound-activity.jsonl`. Repeating the same agreement is a no-op.
+For an intentional mode/owner change, inspect `compound` with `action: status`,
+change the authored setup configuration, then include `expected_trigger` with the
+exact previous `trigger` mapping. The compare-and-swap rejects stale replacements
+and refuses changes while a run is unfinished. Setting `disabled` and reconciling
+its agreement pauses the fallback; `manual` retains explicit manual runs.
+Removing package-owned hooks uses the setup skill's removal procedure. Changing
+this agreement does not remove an external scheduler; reconcile that scheduler
+before enabling a different trigger.
+
+`action: due` returns `due`, `reason`, `next_due_at`, `active_runs` and
+`inbox_probe`. It is advisory, not a reservation. It uses a nonblocking lifecycle
+lock and a bounded metadata probe: `potential` means candidate files exist,
+`inconclusive` means the entry budget was reached, and only a complete probe can
+say `empty`. It reads no signal claim bodies, runs no model and contacts no
+network. Busy, conflicting, corrupt, future-dated or otherwise ambiguous
+coordination state never authorizes a run. An obviously missing or unwritable
+receipt directory returns `receipts-unavailable` using metadata only; authoritative
+start still verifies actual writes because permissions/mounts can race. Prompt transport further bounds the
+check's elapsed time; discovery/reflection continue independently on failure.
+
+When prompted to delegate, load the installed `knowledge-compound` skill and
+retain the exact selector and parent context. Discover/snapshot the inbox before
+starting, but do not edit owners, publish or drain before the atomic start:
+
+```yaml
+action: start
+workspace_id: workspace:example
+automatic: true
+harness: codex
+parent_session_id: exact-exposed-parent-handle
+session_id: exact-exposed-worker-session
+worker_id: exact-exposed-subagent-handle
+selected: [] # Replace with the exact signal-list snapshots chosen for this run.
+```
+
+Omit unavailable handles; never invent them. Prompt fallback has no native
+automation handle. Set `automation_id` only from an actual scheduler's exposed
+handle, never from the logical trigger owner, task name or workspace marker.
+Do not wait indefinitely to start merely because the provider has not yet
+exposed the worker ID. `automatic: true` rechecks the same
+eligibility under the lifecycle lock. `started: false` means exit without touching
+another run, including when a stale reminder arrives after another worker has
+finished. A winner receives `started: true` and `run_id`. Associate subsequent
+calls with `--compound-run-id`; do not recursively delegate another compound
+worker. The parent continues its own task. A recorded worker handle supports
+reuse only where that provider actually exposes a live/resumable worker.
+
+Some providers return the native worker handle only to the parent after it
+starts or finishes. Pass that exact handle to the worker through the supported
+provider messaging mechanism when available. Once the exact compound run ID is
+known, the parent or worker can attach exposed identity using the same selected
+CLI without repeating compounding:
+
+```yaml
+action: record-worker
+run_id: compound-returned-run-id
+worker_id: exact-exposed-subagent-handle
+parent_session_id: exact-exposed-parent-handle
+harness: codex
+```
+
+These are illustrative placeholders, not values to invent. `run_id` and
+`worker_id` are required; optional `parent_session_id` and `harness` must agree
+with existing recorded identity. The action accepts an active or finished exact
+run, is idempotent for the same values, and rejects conflicting identity. Its
+result includes `action`, `run_id`, `worker_id`, `parent_session_id`, `harness`
+and `updated`. Metadata is recorded in the existing activity JSONL and run
+archive, survives rollover, and does not restart work, change completion or
+authorize edits, publication or drainage. Unknown identity stays absent.
+
+Automatic finish requires `completion` in addition to the existing free-form
+`outcome` and dispositions:
+
+| Completion | Meaning and next prompt eligibility |
+| --- | --- |
+| `completed` | Every selected input has a disposition; wait `interval_seconds` from finish. |
+| `deferred` | Every selected input has a disposition and prerequisites are reported; wait the same interval, retaining unresolved inputs. |
+| `failed` | Attempt failed; retain unresolved inputs and wait `retry_seconds` from finish, without shortening an earlier completed check's interval. |
+| `empty` | No selected inputs or dispositions; no success interval is recorded, so later-arriving signals are eligible. |
+
+Malformed or inapplicable candidate files are not proof that the inbox is empty;
+report an appropriate failure/deferral rather than repeatedly claiming an empty
+successful run. `completed` or `deferred` may retain inputs. Neither classification
+proves publication or permits drainage. Existing publication assertions, owner
+validation and unchanged-byte drain checks remain mandatory. A manual finish may
+omit `completion`; its free-form outcome alone does not establish automatic
+success. Readiness problems are visible without spawning on every prompt.
+
+Unmatched starts remain active indefinitely, with exact recorded identities.
+Never take over because a timestamp is old. Inspect archived inputs, owner edits,
+publication and drain evidence and reconcile the original run before another
+worker starts. A new attempt may include `recovery_of` naming the prior, already
+finished run; this preserves lineage without impersonating its worker. An
+interrupted finish with durable evidence but no terminal coordination record
+requires inspection, not a blind retry. No additional timestamp/lease database is
+maintained. Rollover retains unmatched starts, the latest relevant terminal
+start/end pair, the latest check needed for clock safety and the current trigger;
+a later failed attempt does not discard the most recent completed check. Older
+records remain in the existing coordination/run archives. If storage fails before
+an attempt can be durably started, report unavailable readiness; do not fabricate
+a successful or failed terminal record.
 
 For a local review of a UTC interval (inclusive start, exclusive end):
 
