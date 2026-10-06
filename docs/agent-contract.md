@@ -71,6 +71,69 @@ For a request-schema error, use the diagnostic's field and the operation schema
 to correct the request while preserving its intended question and filters.
 Do not discard fields arbitrarily until a different query happens to succeed.
 
+## Check a launch route without preparing it again
+
+Use the installed `preflight` operation for lightweight launch diagnostics:
+
+```bash
+agent-knowledge --settings /work/private/profiles.yaml --profile example preflight --request-file - <<'JSON'
+{"provider":"codex","consumer":"/work/code/orders-api","expected_venv":"/opt/agent-knowledge","expected_execution":"container"}
+JSON
+```
+
+All request fields are optional and strictly validated. `mode` defaults to `read`;
+`provider` is `codex`, `claude` or `copilot`. `consumer` and `expected_venv` are
+absolute paths in the current execution environment. `expected_workspace_id`
+asserts the selected workspace. Omit `expected_execution` for an ordinary local
+check; supply `container` or `host` only when that tool-process target is required.
+Discover the exact request through `describe` with `{"schema":"preflight"}`.
+
+The `knowledge-preflight.v1` report contains `status`, `diagnostics`, `execution`,
+`runtime`, resolved `routes`, `selection`, `environment_declaration`, `hooks`, and
+independent `readiness` fields. Selection retains the effective fingerprint.
+The environment declaration contains only the resolved private-file path and
+`from_env` / `expose_as` mappings, never values; it lets a prepared launcher reject
+changed declarations that are outside the configuration fingerprint.
+
+Preflight reuses doctor's configuration/catalog, source-directory, private-file
+and storage checks. It compares this interpreter's venv, selected/expected venv,
+PATH launchers and requested provider executable without running the provider.
+It performs no installation, APM work, network/model invocation, corpus scan,
+credential activation, receipt append or compounding. It does not copy private
+files or repair paths. Unfinished blank credentials remain `environment:not-ready`
+and non-success overall while independent `read` readiness can remain `ready`.
+
+Execution observations describe **this tool process**. On Linux, marker presence,
+recognized bounded cgroup entries or a bounded `systemd-detect-virt --container`
+result support `container`; absent/unreadable markers and `0::/` remain `unknown`.
+Native Darwin is `host` relative to a Linux-container target; that does not locate
+a VM or the outer harness. Other kernels without supported positive evidence stay
+`unknown`; Linux probes are not attempted there. Detection is evidence, not a
+security boundary. An explicit expectation fails if unknown or mismatched.
+
+`hooks.file_available` only reports the selected consumer registration file's
+existence. Its contents/registration, native trust and hook firing remain
+`unverified`; a filename or PATH executable is not native delivery proof.
+`execution.harness_location`, credential activation and `harness_sandbox` also
+remain unverified. Run native acceptance through the actual launcher and tool
+sandbox to establish those separate facts.
+
+Explicit `{"mode":"write"}` uses only doctor's disposable probes in existing,
+validated signal/usage directories and reports their cleanup. A mismatched
+execution/runtime route or unavailable launch prerequisite prevents these writes.
+The reported `write_scope` is this process and its inherited restrictions; an
+unrestricted shell result cannot certify another harness's sandbox. Requested
+write readiness must verify both signal and receipt stores. No signal is added,
+no user content is deleted and no missing directory is created.
+
+Exit categories remain `0` for the checks that passed, `2` for invalid input,
+route mismatches or unestablished requirements, and `3` for I/O/runtime failures.
+A successful lightweight check can coexist with explicitly unverified native
+harness evidence. Preserve visible failures when the consumer supports a degraded
+launch; do not turn a failed check into a success marker. Relevant runtime, profile,
+mount, credential-declaration or launcher changes require their owning preparation
+and acceptance steps, rather than an unconditional reinstall on every launch.
+
 ## Select a knowledge profile for this session
 
 The user-owned registry is `~/.config/agent-knowledge/config.yaml`. Resolution

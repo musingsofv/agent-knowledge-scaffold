@@ -348,6 +348,30 @@ def _schemas() -> dict[str, dict[str, FieldSpec]]:
                 "string", "Assert selected workspace identity; not a catalog filter."
             ),
         },
+        "preflight": {
+            "mode": _field(
+                "string", "read (default) or explicit write using only disposable doctor probes."
+            ),
+            "provider": _field(
+                "string", "Optional codex, claude or copilot; locate without executing it."
+            ),
+            "expected_execution": _field(
+                "string",
+                "Optional container or host assertion about the current tool "
+                "process; unknown cannot satisfy it.",
+            ),
+            "expected_venv": _field(
+                "string", "Absolute runtime path; compare selected interpreter and PATH launchers."
+            ),
+            "expected_workspace_id": _field(
+                "string", "Assert selected workspace identity before write probes."
+            ),
+            "consumer": _field(
+                "string",
+                "Absolute consumer path for registration-file availability; "
+                "never proves native trust or delivery.",
+            ),
+        },
         "context": {},
         "describe": {
             "schema": _field("string", "Select one of the schemas listed by describe."),
@@ -383,6 +407,10 @@ def describe(value: object) -> Description:
         commands={
             "describe": "Discover schemas; optional schema/field. Configuration is not required.",
             "doctor": "Check setup; optional mode/expected_workspace_id.",
+            "preflight": (
+                "Bounded launch readiness with knowledge-preflight.v1 report; "
+                "read by default, no installation or native harness invocation."
+            ),
             "context": (
                 "Read effective configuration, selection, origins and safe selected-profile "
                 "environment metadata; no request fields."

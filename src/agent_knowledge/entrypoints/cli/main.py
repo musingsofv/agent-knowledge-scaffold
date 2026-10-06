@@ -17,6 +17,7 @@ from agent_knowledge.application.diagnostics import Diagnostic, from_error
 from agent_knowledge.application.discovery import catalog_result, context_result
 from agent_knowledge.application.doctor import run_doctor
 from agent_knowledge.application.invocation import invocation_context, resolve_compound_invocation
+from agent_knowledge.application.preflight import run_preflight
 from agent_knowledge.application.retrieval import inspect_result, search_result
 from agent_knowledge.application.signals import list_signal_result, record_signal_result
 from agent_knowledge.application.usage import export_usage, maintain_usage
@@ -64,6 +65,7 @@ def _parser() -> Parser:
         "context",
         "catalog",
         "doctor",
+        "preflight",
         "search",
         "inspect",
         "validate",
@@ -180,7 +182,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         output = args.output
         _validate_selectors(args)
         # Resolve before request decoding so malformed requests have the right receipt store.
-        if args.command not in {"describe", "doctor", "profiles list"}:
+        if args.command not in {"describe", "doctor", "preflight", "profiles list"}:
             workspace = _resolve(args)
             context = InvocationContext(workspace.definition.workspace_id)
         validate_invocation(args.harness, args.session_id)
@@ -210,6 +212,15 @@ def main(argv: Sequence[str] | None = None) -> int:
                     list_profiles(Path(args.settings) if args.settings is not None else None),
                     0,
                 )
+            case "preflight":
+                preflight = run_preflight(
+                    Path(args.config) if args.config is not None else None,
+                    request,
+                    settings=Path(args.settings) if args.settings is not None else None,
+                    profile=args.profile,
+                )
+                data, exit_code = asdict(preflight), preflight.exit_code
+                data.pop("exit_code")
             case "doctor":
                 checked = run_doctor(
                     Path(args.config) if args.config is not None else None,
