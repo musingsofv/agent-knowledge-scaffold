@@ -960,6 +960,85 @@ def _active_hook_path(consumer: Path, target: str) -> Path:
     return consumer / ".github" / "hooks" / "knowledge-agent-pack-knowledge-discovery.json"
 
 
+def _guard_managed_targets(consumer: Path, targets: tuple[str, ...]) -> None:
+    """Refuse a potentially pruning install before changing an existing consumer."""
+    instruction_paths = {
+        "codex": consumer / "AGENTS.md",
+        "claude": consumer / "CLAUDE.md",
+        "copilot": consumer / ".github/copilot-instructions.md",
+    }
+    omitted = [
+        target for target in _TARGET_ORDER
+        if target not in targets
+        and (_active_hook_path(consumer, target).exists() or instruction_paths[target].exists())
+    ]
+    if omitted:
+        raise SetupFailure(
+            "apm-targets-would-narrow",
+            "Existing harness projections would be omitted: " + ", ".join(omitted) + ".",
+            [],
+            remediation="Preserve the existing target set, or use prepare then the "
+            "repository-owned installation/compilation before bind and final checks.",
+        )
+
+
+def _launch_report(
+    context: dict[str, Any],
+    environment: dict[str, object],
+    *,
+    launcher: Path,
+    selector: list[str],
+    venv: Path,
+    consumer: Path,
+    targets: tuple[str, ...],
+    hooks_ready: bool,
+) -> dict[str, object]:
+    """Supply value-free launch recipes; native acceptance remains a separate step."""
+    raw = context.get("environment")
+    declaration = None if raw is None else {
+        "file": raw["file"],
+        "variables": [
+            {"from_env": item["from_env"], "expose_as": item["expose_as"]}
+            for item in raw["variables"]
+        ],
+    }
+    providers: dict[str, object] = {}
+    activations = environment.get("providers", {})
+    for target in _TARGET_ORDER:
+        activation = activations.get(target, {}) if isinstance(activations, dict) else {}
+        state = activation.get("status") if isinstance(activation, dict) else None
+        ready = hooks_ready and target in targets and state in {
+            "cli-launch", "native-session-start", "not-configured"
+        }
+        command = activation.get("command") if isinstance(activation, dict) else None
+        providers[target] = {
+            "status": "ready" if ready else "pending",
+            "argv": shlex.split(command) if ready and isinstance(command, str)
+            else [target] if ready else None,
+        }
+    selection = context.get("selection", {})
+    registry = selection.get("settings_path") if isinstance(selection, dict) else None
+    return {
+        "schema": "knowledge-launch-recipe.v1",
+        "cwd": str(consumer),
+        "path_prepend": str(venv / "bin"),
+        "settings": registry,
+        "environment_declaration": declaration,
+        "selection": selection,
+        "preflight": {
+            "argv": [str(launcher), *selector, "preflight", "--request-file", "-"],
+            "request": {
+                "mode": "read", "consumer": str(consumer),
+                "expected_venv": str(venv),
+                "expected_workspace_id": context.get("workspace_id"),
+            },
+        },
+        "providers": providers,
+        "verification": "Run launch_container.py with the saved setup report; "
+        "native trust, hook firing and tool-sandbox writes require actual-session acceptance.",
+    }
+
+
 def _normalize_active_hook(
     path: Path, target: str, launcher: Path, event_name: str, command: str
 ) -> None:
@@ -2023,6 +2102,8 @@ def run_setup(
         raise SetupFailure("missing-path", "--package does not exist.", steps)
     consumer_path = _existing_directory(consumer, "--consumer")
     targets = _targets(target_text)
+    if apm_mode == "managed":
+        _guard_managed_targets(consumer_path, targets)
     apm = shutil.which("apm") if targets and apm_mode == "managed" else None
     if targets and apm_mode == "managed" and apm is None:
         raise SetupFailure("apm-unavailable", "Install the APM CLI and retry setup.", steps)
@@ -2197,6 +2278,11 @@ def run_setup(
             "command": _shell_command([str(launcher), *selector, "doctor"]),
         },
         "environment": environment_report,
+        "launch": _launch_report(
+            context, environment_report, launcher=launcher, selector=selector,
+            venv=_absolute(venv_path, "--venv"), consumer=consumer_path,
+            targets=targets, hooks_ready=hook_report["status"] == "ready",
+        ),
         "compounding": compound_report,
         "steps": [asdict(step) for step in steps],
         "automation_registration": {

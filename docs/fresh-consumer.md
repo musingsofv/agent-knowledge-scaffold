@@ -378,6 +378,13 @@ pause/remove actions. Live prompt/worker proof remains separate from fixtures.
 
 For your own Docker/devcontainer image, follow
 [container setup](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/containers.md).
+Start by establishing tool and harness execution location. Setup can prepare
+container-local profile paths/private-file projections and supply an exact
+launch recipe. Use its `launch_container.py` route on both fresh and reused
+containers, then verify selected retrieval, receipt/signal writes, credentials
+and native hooks through actual harness tools. An unrestricted Docker-shell
+check does not establish the harness sandbox. Later launches use `preflight`;
+repeat setup only for relevant runtime, profile, APM or launch changes.
 Provision a pinned runtime during image build without knowledge mounts or
 credentials. After mounts exist, `--runtime-mode existing` verifies that runtime
 against the read-only package input without uv, installation or venv writes.

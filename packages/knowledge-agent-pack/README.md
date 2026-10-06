@@ -216,6 +216,12 @@ matching wheel or source payload and works without `uv` or writable venv files.
 The wheel does not contain the setup skill; install its matching APM package.
 Use an environment-local registry and persistent storage with proven locking.
 See [container setup](.apm/skills/knowledge-setup/references/containers.md).
+The skill first establishes whether its tools and harness execute in the
+intended container. Its profile-preparation helper safely projects designated
+private inputs where needed, preserving strict runtime validation. Setup emits
+an exact value-free launch recipe; `launch_container.py` checks it through the
+installed `preflight` before execution. Verify real native hooks, credentials
+and sandbox writes separately. Later launches do not reinstall or compile.
 
 ## Compounding
 

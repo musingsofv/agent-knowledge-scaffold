@@ -57,6 +57,13 @@ For a developer-owned Docker/devcontainer image, also read
 [Container setup](references/containers.md). Preserve their base image, user,
 tools and startup commands. Separate image-time runtime provisioning from
 post-mount workspace/profile/APM binding; no mandatory scaffold image is needed.
+Before choosing paths, establish where the current tools and intended harness
+execute. Use the container reference's detection procedure; Linux or a
+workspace-looking path alone is insufficient. Report host or uncertain location
+before dependent changes. A host agent using `docker exec` has not established
+that its harness runs inside the container. Prepare the local profile and exact
+launch integration, then verify through that launcher. Ordinary launches perform
+preflight; installation/compilation and binding recur only for relevant changes.
 
 1. Resolve the intended workspace path, suggesting
    `<current checkout>/knowledge-workspace.yaml` when not supplied. Inspect

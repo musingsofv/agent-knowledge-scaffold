@@ -104,6 +104,15 @@ using portable hooks and persistent state without writing an immutable venv.
 
 ## Known limitations
 
+Container setup distinguishes execution observations, selected-runtime/PATH
+checks, private-file preparation, native activation, hook registration/trust and
+actual tool-sandbox writes. The installed `preflight` reports only what its own
+process can establish; native firing and outer-harness permissions remain
+unverified until tested through the consumer's real launcher. Linux runtime
+fixtures do not prove provider support on every image or Windows-host mounts.
+The [container guide](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/containers.md)
+owns the acceptance and change-invalidation procedure.
+
 - The agent chooses queries, relevance, file ranges, graph expansion, signal
   usefulness and compounding owners. The deterministic tool validates and
   records those choices; it does not make them semantically deterministic.

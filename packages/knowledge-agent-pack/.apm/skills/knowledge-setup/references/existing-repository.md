@@ -16,6 +16,11 @@ Inspect applicable `AGENTS.md` or other harness instructions, `apm.yml`, the
 registered architecture/layout, package scripts, APM version pin and generation
 checks. Identify the consumer's selected targets and existing local skills,
 external dependencies, generated outputs, lock ownership and staging checks.
+Preserve the complete existing target set during installation. A narrow target
+argument can prune other native projections in some APM versions; verify actual
+outputs after the final install/compile. Helper-managed setup rejects omitted
+existing projections instead of silently narrowing them. Existing repository
+commands remain authoritative; use staged integration to preserve their policy.
 Do not infer that a repository with an empty dependency list forbids all future
 packages: adding this package may require an explicit, narrow contract update.
 Use existing setup authorization; ask only about unresolved material policy or

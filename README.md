@@ -14,7 +14,7 @@ for updates. Setup helps establish both; a second scaffold checkout is unnecessa
 See [first-time setup](docs/fresh-consumer.md#create-your-knowledge-instance).
 
 The installed `agent-knowledge` launcher provides `describe`, `doctor`,
-`context`, `catalog`, `search`, `inspect`, `validate`, `signal record`,
+`context`, `preflight`, `catalog`, `search`, `inspect`, `validate`, `signal record`,
 `signal list`, `compound`, `usage export` and `profiles list`. The neutral APM package supplies setup and
 compounding skills plus discovery/reflection and conditional compounding hooks. Plans and evidence are linked
 below; completed plans retain implementation history and proof boundaries.
@@ -71,6 +71,12 @@ Keep your own container image and tools. Install the pinned wheel at image
 build, then use `--runtime-mode existing --portable-hooks` after mounts are
 available to verify and bind without reinstalling or writing into the venv.
 See [container setup](packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/containers.md).
+Setup first establishes where the agent tools and harness execute. It can
+prepare a private container-local profile, then emits a value-free launch recipe
+with an installed `preflight` check. Verify retrieval, writes, credentials and
+native hooks through the actual launcher; subsequent launches do not reinstall
+or recompile. The container reference distinguishes setup checks from native
+sandbox and hook evidence. No scaffold container image is supplied.
 
 ## Develop the core
 

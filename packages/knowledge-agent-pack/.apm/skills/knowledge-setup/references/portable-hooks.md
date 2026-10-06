@@ -46,6 +46,9 @@ profiles:
 ```
 
 Mount credentials privately with mode `0600` and ownership for the runtime user.
+If a designated host mount cannot enforce that contract, use the guarded
+[container profile preparation](container-profiles.md) route; do not weaken
+the runtime reader or assume chmod changed the mounted file's effective mode.
 Use existing profile overrides for environment-specific workspace paths when
 needed. Do not share a Linux venv with a native macOS or Windows process.
 
@@ -107,6 +110,8 @@ Run `agent-knowledge --profile work context` and write-mode `doctor` in each
 environment. Verify hooks from a fresh actual harness session too: setup's PATH
 check proves only its own process environment. Repeat bind should leave the
 shared hook files and Copilot deployment hashes unchanged across environments.
+Container users also verify the [actual launcher](containers.md#integrate-the-actual-launcher),
+including native tool-sandbox write access and fresh/reused container paths.
 APM upgrades can restore marker commands, so repeat installation and binding
 with the same mode. Preserve unrelated hooks and repository-owned checks.
 
