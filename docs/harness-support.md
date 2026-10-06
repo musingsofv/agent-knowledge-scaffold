@@ -58,6 +58,13 @@ process, hook, filesystem or credential surfaces.
 | Copilot app | Repository instructions are supported, but generic per-task env-file injection and the local CLI's Bash activation bridge are unavailable. Use the app's selected GitHub identity and provider-native credential surfaces. |
 | Copilot cloud agent | Outside this local setup target. The local launcher and hook binding do not configure that execution environment; no cloud execution proof is claimed. |
 
+## Existing containers
+
+Container setup and checked launches have their own [proof report](container-launch-proof.md).
+Host-native results above do not establish authenticated in-container operation.
+The report separates runtime/filesystem fixtures, native launcher acceptance,
+credential activation, hooks and outstanding sandbox/Windows-host coverage.
+
 ## Setup readiness boundaries
 
 Runtime/read, signal/receipt writes, hooks, profile credentials and automation

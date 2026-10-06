@@ -226,5 +226,7 @@ No additional review round was commissioned.
 The local `.cache/local-compounding/transcripts/` directory holds redacted
 copies of direct probe logs and native proof snapshots. `transcript-manifest.json`
 records their source paths and checksums. Provider authentication directories
-are excluded. The change remains uncommitted on the isolated implementation
-branch; no consumer install, automation change or remote publication was made.
+are excluded. That candidate was subsequently preserved as commit `f0186a1` on the same
+implementation branch. Its [container-launch follow-up](container-launch-proof.md)
+adds separate setup/launch proof. No consumer install, automation change or
+remote publication was made by either implementation task.

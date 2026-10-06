@@ -1,16 +1,17 @@
 # Existing-container setup and launch readiness
 
 Date: 2026-10-06
-Status: Planned; implementation and acceptance execution have not started.
+Status: Implementation complete; deterministic and runtime checks passed; native container acceptance remains partial.
 Owner: Agent Knowledge Scaffold, primarily the `knowledge-setup` skill.
-Baseline: the local `nik/local-compounding-hooks` candidate based on
-`c2e6d875a68d165e3d94870c5040980625ac9451`, including its uncommitted changes.
+Baseline: `f0186a1` on `nik/local-compounding-hooks`, preserving the previous
+local-compounding candidate based on `c2e6d875a68d165e3d94870c5040980625ac9451`.
 
 This is a follow-up to
 [local compounding and container setup](local-compounding-hooks-and-container-setup.md).
 It preserves that work and its recorded proof; it adds container launch and
-acceptance requirements. The owner requested this plan, not implementation,
-consumer installation, publication or changes to running sessions.
+acceptance requirements. The owner subsequently authorized implementation on
+the same worktree/branch with commits on top. Consumer installation, publication
+and changes to running user sessions remain outside this implementation task.
 
 ## Outcome and boundaries
 
@@ -348,23 +349,23 @@ Primary authored surfaces:
 
 ## Acceptance criteria
 
-- [ ] **AC1:** Agent instructions assess container/host/unknown execution before
+- [x] **AC1:** Agent instructions assess container/host/unknown execution before
   choosing setup paths; distinguish tool and harness locations without relying
   on Linux alone or modifying the wrong environment.
-- [ ] **AC2:** Developer retains image, runtime user, tools and launcher. No
+- [x] **AC2:** Developer retains image, runtime user, tools and launcher. No
   distributed Docker image or required Dockerfile/devcontainer/Compose project.
 - [ ] **AC3:** Both immutable image runtime and explicit container-local
   provisioning work, preserve supported Python, and verify exact package parity.
-- [ ] **AC4:** Selected profile resolves every relevant path inside the target
+- [x] **AC4:** Selected profile resolves every relevant path inside the target
   environment, preserving relative bases, defaults and explicit user overrides.
-- [ ] **AC5:** Private projection is guarded, atomic and repeatable, with tested
+- [x] **AC5:** Private projection is guarded, atomic and repeatable, with tested
   refresh/removal and interruption/concurrency behaviour. Runtime credential
   validation is unchanged; originals and unrelated profiles survive.
 - [ ] **AC6:** Exact provider launch actions carry the intended environment and
   original argument semantics on fresh and reused container routes.
-- [ ] **AC7:** Preflight reports independent readiness and specific remediation;
+- [x] **AC7:** Preflight reports independent readiness and specific remediation;
   ordinary launch performs no install, APM compile/rebind, model call or compound.
-- [ ] **AC8:** Consumer APM pins, target set, local skills, authored ownership,
+- [x] **AC8:** Consumer APM pins, target set, local skills, authored ownership,
   generated outputs and final/index checks survive installation and rebinding.
 - [ ] **AC9:** One actual-launcher acceptance sequence proves selected retrieval
   and receipts/signals in the harness's effective sandbox, not only Docker exec.
@@ -372,15 +373,15 @@ Primary authored surfaces:
   or secret output; blanks and unavailable activation remain visibly pending.
 - [ ] **AC11:** Native registration, trust and firing are distinguished for
   Codex, Claude and Copilot. Regeneration/upgrade invalidates affected proof.
-- [ ] **AC12:** Persistent state and lock coordination survive reuse/recreation;
+- [x] **AC12:** Persistent state and lock coordination survive reuse/recreation;
   private credential lifecycle does not reset signals, sessions or activity.
 - [ ] **AC13:** No automatic sandbox widening, trust granting or changes to
   unrelated global configuration; read-only and native override semantics hold.
-- [ ] **AC14:** Compounding retains existing state, ownership, native workers,
+- [x] **AC14:** Compounding retains existing state, ownership, native workers,
   scheduling preference/fallback and publication boundaries; no new trigger.
-- [ ] **AC15:** Reports distinguish deterministic, container-filesystem and real
+- [x] **AC15:** Reports distinguish deterministic, container-filesystem and real
   harness proof, with exact version/environment coverage and missing prerequisites.
-- [ ] **AC16:** Skills, installed contracts, examples and focused regressions
+- [x] **AC16:** Skills, installed contracts, examples and focused regressions
   agree; native repository gates and applicable fresh-consumer checks pass.
 
 ## Validation matrix and proof limits
@@ -413,9 +414,61 @@ proof; do not check the corresponding live criterion as complete. Native
 scheduling tests remain paused under existing instructions. Container acceptance
 does not require creating a scheduler or running real compounding.
 
+## Acceptance evidence
+
+See [container launch proof](../../docs/container-launch-proof.md) for exact
+commands, versions, native session handles, review findings and evidence paths.
+Checked criteria have the following bounded proof; unchecked criteria are
+implemented but lack the complete live coverage in their wording.
+
+| Criteria | Result and evidence |
+| --- | --- |
+| AC1, AC2 | Setup skill and container reference give concrete read-only location checks and preserve the developer's image/tools. Detection and route fixtures pass; test images are confined to e2e fixtures. |
+| AC3 | Partial: exact-wheel immutable Debian/Alpine runtime proof passes. Writable provisioning passes on the host and in deterministic tests; direct container-local provisioning is not yet exercised. |
+| AC4, AC5 | Path-base/default/override, guarded projection, interruption/concurrency, refresh/removal and strict-credential regression tests pass. |
+| AC6 | Partial: generated launch actions, argv/environment fixtures and all three CLI startups pass; Codex authenticates in fresh/reused/recreated containers. Tool-level inherited environment proof is blocked; Claude/Copilot model authentication is unavailable. |
+| AC7 | Preflight failure/readiness tests pass with bounded probes and no routine installation, compilation, rebind, model invocation or compounding. |
+| AC8 | Fresh-consumer checks cover targets, local skills, owned prepare/install/compile/bind and generated-source parity. Native container tests preserve all three targets and repeat binding. Real consumers were not modified; their own final/index gates remain authoritative. |
+| AC9 | Partial: driver and runtime/adapter checks pass, but authenticated Codex shell tools fail to create a namespace. Native retrieval and receipt/signal writes remain unverified. |
+| AC10 | Partial: strict blanks, activation/redaction and clean-parent fixtures pass. Codex provider authentication works; tool-facing credential activation in the actual model session remains unverified. |
+| AC11 | Partial: registration/rebind and distinct trust/firing reporting pass. Actual lifecycle/prompt delivery is unverified in the container for all three providers. |
+| AC12 | Debian/Alpine nonroot runtime tests prove persistent state, locks, concurrent receipts and recreation. Native model attempts produced no state, so their empty checkpoints add no persistence proof. |
+| AC13 | Partial: source review and deterministic tests preserve sandbox/native overrides and no global configuration is changed. Native source/credential-write denial and explicit read-only launch remain unverified. |
+| AC14 | One consolidated semantic review confirms unchanged state authority, native worker interface, scheduling preference/fallback and publication boundaries; no new trigger or scheduler is installed. |
+| AC15, AC16 | Separate proof reports, synchronized resources, 1,825 passing tests, lint/format/type/skill checks, build and isolated fresh-consumer checks. Windows-host mount behavior is explicitly unverified. |
+
 ## Current checkpoint
 
-- Plan saved; C1-C5 and AC1-AC16 are not implemented or verified by this task.
-- Earlier local-compounding candidate and its evidence are preserved.
-- No runtime, consumer, credentials, automation or running session changed.
-- Next action: implement C1 against the reconciled candidate when requested.
+- Same branch/worktree retained: `nik/local-compounding-hooks`; prior feature
+  preserved in `f0186a1`. Runtime/skill slices are `e8859ce`, `67af72a`, `ddf33fe`;
+  consolidated-review safeguards are `62ef1ed`; acceptance/failure evidence is
+  `27cd6e9`. The final documentation commit follows those slices.
+- C1-C4 implementation and C5 evidence/reporting are complete, with the live
+  limits above. One consolidated round of four independent read-only reviewers
+  is complete; seven defects are fixed. No second review round was run. The
+  eighth finding remains incomplete native sandbox proof, explicitly reported.
+- Final suite: 1,825 tests passed in 67.16 seconds in
+  `.cache/container-launch-proof/pytest-final-auth-route.txt`. Lint, formatting,
+  mypy, packaging, skill validation and full isolated fresh-consumer checks pass.
+  Unchanged build/consumer proof is reused; later changes affect only the
+  acceptance driver, its regressions and documentation.
+- Current-wheel Debian and Alpine immutable-runtime/filesystem/recreation proof
+  passed in `.cache/container-runtime-final/report.json`. Direct container-local
+  writable provisioning and Windows-host mount behavior remain unverified.
+- Native preparation exposed a pinned APM binary ABI limitation, Docker storage
+  exhaustion and a phase-dependent APM audit expectation. Evidence and targeted
+  fixture repairs are recorded; no consumer gate was weakened or bypassed.
+- Latest native result: `.cache/container-launch/authenticated/report.json`.
+  The corrected explicit Codex API-auth bridge works in fresh, reused and
+  recreated containers. All native shell tools hit the bwrap namespace-policy
+  failure. No privilege or sandbox override was attempted; retrieval, writes,
+  fixture-credential activation and hook firing remain unverified. CLI startup,
+  repeat bind, target preservation and recreation pass.
+- Claude/Copilot live authentication is unavailable. Native scheduling remains
+  paused. No consumer installation, actual profile credential/automation changes,
+  push or remote publication. Reflection preserves evidence-backed limitations
+  without duplicating existing container setup observations.
+- Handoff: implementation can be reviewed at this branch. Full native acceptance
+  requires a compatible owner-approved container sandbox plus designated
+  Claude/Copilot authentication; rerun only affected checks through the launcher.
+  Do not reset user state, alter live sessions or start another review round.
