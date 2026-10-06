@@ -145,6 +145,11 @@ def provider_arguments(provider: str, prompt: str) -> list[str]:
                 "features.hooks=true",
                 "-c",
                 'approval_policy="never"',
+                "-c",
+                "allow_login_shell=false",
+                "-c",
+                # Codex ignores dotted quoted-path overrides; use its TOML map.
+                "projects={" + json.dumps(str(CONSUMER)) + '={trust_level="trusted"}}',
                 "exec",
                 "--json",
                 "--sandbox",
@@ -514,6 +519,9 @@ def prepare() -> dict:
             },
         )
         run(["git", "init", "--quiet"], cwd=CONSUMER)
+        # Signal provenance belongs to the central fixture checkout, distinct
+        # from the consumer. Doctor's filesystem probe does not establish Git.
+        run(["git", "init", "--quiet"], cwd=STATE / "knowledge")
     arguments = [
         str(RUNTIME / "bin/python"),
         str(SETUP / "setup_runtime.py"),
@@ -761,6 +769,13 @@ def host(args: argparse.Namespace) -> dict:
     run(["docker", "info", "--format", "{{.OSType}}"])
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
+    security = ["--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
+    seccomp = None
+    if args.docker_seccomp_profile is not None:
+        # Explicit fixture-only Docker policy; never change daemon or harness policy.
+        seccomp = args.docker_seccomp_profile.resolve(strict=True)
+        security += ["--security-opt", f"seccomp={seccomp}"]
+        shutil.copyfile(seccomp, output / "docker-seccomp.json")
     suffix = uuid.uuid4().hex[:12]
     image, volume = f"knowledge-launch-proof:{suffix}", f"knowledge-launch-proof-{suffix}"
     container = f"knowledge-launch-proof-{suffix}"
@@ -773,6 +788,11 @@ def host(args: argparse.Namespace) -> dict:
         "volume": volume,
         "providers": {},
         "preparation": [],
+        "docker_security": {
+            "cap_drop": ["ALL"],
+            "no_new_privileges": True,
+            "seccomp": str(seccomp) if seccomp else "docker-default",
+        },
     }
     with tempfile.TemporaryDirectory(prefix="knowledge-launch-build-") as temporary:
         context = Path(temporary)
@@ -837,6 +857,7 @@ def host(args: argparse.Namespace) -> dict:
                         "--detach",
                         "--name",
                         container,
+                        *security,
                         *mount,
                         *auth_flags,
                         image,
@@ -944,6 +965,11 @@ def main() -> int:
     parser.add_argument("--providers", default=",".join(PROVIDERS))
     parser.add_argument("--live-agent", action="store_true")
     parser.add_argument("--auth-env", action="append", default=[], metavar="PROVIDER:VARIABLE")
+    parser.add_argument(
+        "--docker-seccomp-profile",
+        type=Path,
+        help="Explicit operator-approved syscall policy for this disposable fixture only.",
+    )
     parser.add_argument(
         "--keep", action="store_true", help="Retain disposable image and volume for diagnosis."
     )

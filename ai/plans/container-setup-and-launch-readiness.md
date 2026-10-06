@@ -367,7 +367,7 @@ Primary authored surfaces:
   ordinary launch performs no install, APM compile/rebind, model call or compound.
 - [x] **AC8:** Consumer APM pins, target set, local skills, authored ownership,
   generated outputs and final/index checks survive installation and rebinding.
-- [ ] **AC9:** One actual-launcher acceptance sequence proves selected retrieval
+- [x] **AC9:** One actual-launcher acceptance sequence proves selected retrieval
   and receipts/signals in the harness's effective sandbox, not only Docker exec.
 - [ ] **AC10:** Credential activation is verified without ambient false positives
   or secret output; blanks and unavailable activation remain visibly pending.
@@ -375,7 +375,7 @@ Primary authored surfaces:
   Codex, Claude and Copilot. Regeneration/upgrade invalidates affected proof.
 - [x] **AC12:** Persistent state and lock coordination survive reuse/recreation;
   private credential lifecycle does not reset signals, sessions or activity.
-- [ ] **AC13:** No automatic sandbox widening, trust granting or changes to
+- [x] **AC13:** No automatic sandbox widening, trust granting or changes to
   unrelated global configuration; read-only and native override semantics hold.
 - [x] **AC14:** Compounding retains existing state, ownership, native workers,
   scheduling preference/fallback and publication boundaries; no new trigger.
@@ -426,14 +426,14 @@ implemented but lack the complete live coverage in their wording.
 | AC1, AC2 | Setup skill and container reference give concrete read-only location checks and preserve the developer's image/tools. Detection and route fixtures pass; test images are confined to e2e fixtures. |
 | AC3 | Partial: exact-wheel immutable Debian/Alpine runtime proof passes. Writable provisioning passes on the host and in deterministic tests; direct container-local provisioning is not yet exercised. |
 | AC4, AC5 | Path-base/default/override, guarded projection, interruption/concurrency, refresh/removal and strict-credential regression tests pass. |
-| AC6 | Partial: generated launch actions, argv/environment fixtures and all three CLI startups pass; Codex authenticates in fresh/reused/recreated containers. Tool-level inherited environment proof is blocked; Claude/Copilot model authentication is unavailable. |
+| AC6 | Partial across providers: generated actions, argv/environment fixtures and all three CLI startups pass. Codex tool-level environment and retrieval proof passes in fresh/reused/recreated containers after the authorized seccomp adjustment. Claude/Copilot model authentication remains unavailable. |
 | AC7 | Preflight failure/readiness tests pass with bounded probes and no routine installation, compilation, rebind, model invocation or compounding. |
 | AC8 | Fresh-consumer checks cover targets, local skills, owned prepare/install/compile/bind and generated-source parity. Native container tests preserve all three targets and repeat binding. Real consumers were not modified; their own final/index gates remain authoritative. |
-| AC9 | Partial: driver and runtime/adapter checks pass, but authenticated Codex shell tools fail to create a namespace. Native retrieval and receipt/signal writes remain unverified. |
-| AC10 | Partial: strict blanks, activation/redaction and clean-parent fixtures pass. Codex provider authentication works; tool-facing credential activation in the actual model session remains unverified. |
+| AC9 | Passed for the selected Codex route: actual model tool calls through the generated launcher prove retrieval, correlated receipts, signals and guarded cleanup in fresh/reused/recreated containers. See the authorized Docker retest. |
+| AC10 | Partial across providers: strict blanks, activation/redaction and clean-parent fixtures pass. Codex actual model tools prove mapped canary activation without an ambient target; Claude/Copilot live container authentication remains unavailable. |
 | AC11 | Partial: registration/rebind and distinct trust/firing reporting pass. Actual lifecycle/prompt delivery is unverified in the container for all three providers. |
-| AC12 | Debian/Alpine nonroot runtime tests prove persistent state, locks, concurrent receipts and recreation. Native model attempts produced no state, so their empty checkpoints add no persistence proof. |
-| AC13 | Partial: source review and deterministic tests preserve sandbox/native overrides and no global configuration is changed. Native source/credential-write denial and explicit read-only launch remain unverified. |
+| AC12 | Debian/Alpine runtime tests prove state/lock persistence and concurrent receipts. The authorized Codex retest additionally preserves 16 populated signal/receipt/coordination files across recreation, including hashes/inode identities, and repeat binding passes. |
+| AC13 | Source review and regressions preserve overrides. The generated launcher plus native Codex sandbox helper verifies private-file write denial and explicit read-only roots; actual model tools verify source denial. Operator-authorized Docker changes are per-container, with no daemon or host-policy changes and no privileged/Codex-bypass mode. |
 | AC14 | One consolidated semantic review confirms unchanged state authority, native worker interface, scheduling preference/fallback and publication boundaries; no new trigger or scheduler is installed. |
 | AC15, AC16 | Separate proof reports, synchronized resources, 1,825 passing tests, lint/format/type/skill checks, build and isolated fresh-consumer checks. Windows-host mount behavior is explicitly unverified. |
 
@@ -446,9 +446,11 @@ implemented but lack the complete live coverage in their wording.
 - C1-C4 implementation and C5 evidence/reporting are complete, with the live
   limits above. One consolidated round of four independent read-only reviewers
   is complete; seven defects are fixed. No second review round was run. The
-  eighth finding remains incomplete native sandbox proof, explicitly reported.
-- Final suite: 1,825 tests passed in 67.16 seconds in
-  `.cache/container-launch-proof/pytest-final-auth-route.txt`. Lint, formatting,
+  remaining native sandbox proof was subsequently supplied through the authorized
+  Docker retest; hook delivery and unavailable environment/provider proof remain
+  explicit. These were affected verification runs, not another review round.
+- Final suite: 1,825 tests passed in 64.30 seconds in
+  `.cache/container-launch-proof/pytest-seccomp-final-trust.txt`. Lint, formatting,
   mypy, packaging, skill validation and full isolated fresh-consumer checks pass.
   Unchanged build/consumer proof is reused; later changes affect only the
   acceptance driver, its regressions and documentation.
@@ -458,17 +460,25 @@ implemented but lack the complete live coverage in their wording.
 - Native preparation exposed a pinned APM binary ABI limitation, Docker storage
   exhaustion and a phase-dependent APM audit expectation. Evidence and targeted
   fixture repairs are recorded; no consumer gate was weakened or bypassed.
-- Latest native result: `.cache/container-launch/authenticated/report.json`.
-  The corrected explicit Codex API-auth bridge works in fresh, reused and
-  recreated containers. All native shell tools hit the bwrap namespace-policy
-  failure. No privilege or sandbox override was attempted; retrieval, writes,
-  fixture-credential activation and hook firing remain unverified. CLI startup,
-  repeat bind, target preservation and recreation pass.
+- Latest native result: `.cache/container-launch/seccomp-verified/report.json`.
+  The owner authorized local Docker reconfiguration after the initial namespace
+  failure. A per-container default-deny syscall profile enables nested user/mount
+  namespaces with all capabilities dropped and no-new-privileges. No daemon,
+  host-kernel or real consumer policy is changed. The test container is stopped.
+- Codex actual native tools pass retrieval, receipts, write doctor, mapped fixture
+  credentials, signal capture/guarded drain and source-write denial in fresh,
+  reused and recreated phases. Native sandbox-helper checks additionally prove
+  private-file write denial and explicit read-only roots. Populated state and
+  repeat binding survive recreation. Native hook delivery remains unverified.
+- Fixture corrections initialize central storage as Git, preserve runtime PATH
+  with a non-login tool shell and use Codex's top-level fixture-project trust
+  map. The driver accepts an explicit test-only Docker seccomp policy; it does
+  not reconfigure user Docker or automatically broaden harness permissions.
 - Claude/Copilot live authentication is unavailable. Native scheduling remains
   paused. No consumer installation, actual profile credential/automation changes,
   push or remote publication. Reflection preserves evidence-backed limitations
   without duplicating existing container setup observations.
-- Handoff: implementation can be reviewed at this branch. Full native acceptance
-  requires a compatible owner-approved container sandbox plus designated
-  Claude/Copilot authentication; rerun only affected checks through the launcher.
+- Handoff: implementation can be reviewed at this branch. Remaining acceptance
+  requires observed native hook delivery, designated Claude/Copilot authentication
+  and the unexercised platform/provisioning routes; rerun only affected checks.
   Do not reset user state, alter live sessions or start another review round.

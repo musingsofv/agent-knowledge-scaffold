@@ -5,8 +5,9 @@ This extends the [local-compounding candidate](local-compounding-proof.md) on th
 same branch. The previous feature is preserved in `f0186a1`; implementation slices
 are `e8859ce` (preflight), `67af72a` (private profile preparation), `ddf33fe`
 (owned setup and checked launches), `62ef1ed` (review fixes) and `27cd6e9`
-(acceptance driver and failure evidence). Implementation is complete; native
-container acceptance is partial for the reasons below. No consumer installation
+(acceptance driver and failure evidence). The subsequent authorized Docker
+retest proves Codex tool execution, retrieval, writes and credential activation;
+native container acceptance is still partial for the limits below. No consumer installation
 or publication is part of this work.
 
 ## Developer-facing change
@@ -44,6 +45,7 @@ uv run python tests/e2e/container_runtime_smoke.py \
   --output .cache/container-runtime-final
 uv run python tests/e2e/container_launch_acceptance.py \
   --output .cache/container-launch/acceptance-new --live-agent \
+  --docker-seccomp-profile .cache/container-launch-proof/docker-codex-seccomp.json \
   --auth-env codex:OPENAI_API_KEY --timeout 180 --keep
 ```
 
@@ -62,6 +64,11 @@ sessions, requires correlated native shell execution and exact session IDs,
 checks retrieval receipts, and records/drains its fictional signal through the
 supported CLI. It exports evidence before cleanup on failures. `--keep` retains
 only the named disposable fixture image/volume for diagnosis.
+
+`--docker-seccomp-profile` is an explicit operator-supplied fixture policy, not
+an automatic setup change. Omit it to retain Docker's default syscall policy.
+The driver drops container capabilities and sets `no-new-privileges`, preserves
+Codex's workspace sandbox and copies the selected policy into the evidence.
 
 Fixture versions: Codex CLI 0.160.1, Claude Code 2.1.236, Copilot CLI 1.0.86,
 APM 0.29.0; image/runtime identities are in the resulting reports. Outer CLI
@@ -95,8 +102,9 @@ with focused regressions:
 The eighth finding identified incomplete sandbox proof. The driver now reports
 credential-write and explicit read-only launch checks as **unverified** and keeps
 native acceptance partial. Canonical fixture write denial alone is not complete
-sandbox coverage. These gaps remain outstanding proof, rather than being hidden
-behind a successful retrieval/write probe.
+sandbox coverage. The subsequent authorized Docker retest supplies these checks through the actual
+Codex sandbox helper. The original driver reports remain unchanged, with this
+separate evidence clearly identified; native hook delivery is still unverified.
 
 The semantic review confirmed preservation of explicit profile overrides/defaults,
 local skills, instruction ownership, strict activation, publication boundaries,
@@ -106,15 +114,15 @@ native execution in the developer's environment.
 
 ## Results and limits
 
-The final deterministic suite passed **1,825 tests in 67.16 seconds**. Ruff,
+The final deterministic suite passed **1,825 tests in 64.30 seconds**. Ruff,
 formatting, mypy (57 source files), whitespace checks, skill validation and
 wheel/source builds passed. The isolated fresh-consumer check passed actual
 APM installation/compilation/audit, all three targets, source/resource parity,
 staged prepare/bind, credential readiness/activation fixtures, hook ownership,
 reinstall/rebind, signals and guarded cleanup.
 
-Evidence is in `.cache/container-launch-proof/`: `pytest-final-auth-route.txt`,
-`ruff-final.txt`, `format-final.txt`, `mypy-final.txt`, `skill-final.txt`,
+Evidence is in `.cache/container-launch-proof/`: `pytest-seccomp-final-trust.txt`,
+`ruff-seccomp-final.txt`, `format-seccomp-final.txt`, `mypy-seccomp-final.txt`, `skill-final.txt`,
 `build-final.txt`, `fresh-consumer-final.json` and its `.log`.
 One earlier full run had two detector classification failures; a repeat passed
 all 1,816 then-current tests. 1,350 isolated real detector executions did not
@@ -135,9 +143,87 @@ This remains runtime/registration-fixture proof, not native model proof. The
 writable-runtime installation route passed the host fresh-consumer check and
 deterministic tests; direct Linux-container provisioning remains unverified.
 
-### Native container result
+### Authorized Docker retest
 
-The final attempt is `.cache/container-launch/authenticated/report.json`:
+After the initial failure, the owner authorized reconfiguring Docker for local
+testing. Docker Desktop 4.60.0 / Engine 29.2.0 on arm64 reported builtin seccomp
+and cgroup namespaces. A nonroot `unshare(CLONE_NEWUSER)` probe failed with
+`EPERM` under that default and passed when that operation alone was permitted.
+The kernel supports user namespaces; a global kernel/Docker change was unnecessary.
+
+The local test profile extends a saved upstream Moby default profile, retaining
+its default-deny action and original rules. It additionally permits:
+
+- `clone` only when the `CLONE_NEWUSER` bit is set;
+- `unshare` only with exactly `CLONE_NEWUSER`;
+- `mount`, `umount2` and `pivot_root`, needed for the nested sandbox filesystem.
+
+Removing each of those five syscall permissions separately made the sandbox
+fail. `setns` and `sethostname` were tested and not needed. This establishes the
+tested command's requirements, not a universal policy for every kernel/harness.
+The upstream profile snapshot is identified by digest, not asserted to be
+byte-identical to this engine's builtin profile.
+
+The disposable container remains UID/GID 1000, with `--cap-drop ALL`,
+`no-new-privileges`, no privileged mode, no host-directory or Docker-socket
+mount, and the existing Codex `workspace-write` sandbox. Only its fictional
+state volume is mounted. Docker Desktop settings, daemon configuration, host
+sysctls and actual consumer/user configuration are unchanged.
+
+The retained image was reused with a copied disposable volume. Native tools
+then exposed two fixture defects: central signal storage had not been
+initialized as a Git checkout, and Debian login-shell startup reset the
+runtime PATH. The driver now initializes both fixture repositories and uses
+Codex's `allow_login_shell=false` for this test route. Exact fixture-project
+trust uses the native top-level TOML map; quoted dotted-path overrides are
+ignored by this CLI. No hook-trust or sandbox bypass flag is used.
+
+Actual Codex tools passed selected retrieval, catalog/search/inspect receipts,
+write-mode doctor, synthetic credential activation, signal capture/listing,
+guarded drain with confirmed absence and canonical-file write denial:
+
+| Phase | Native session | Result |
+| --- | --- | --- |
+| Fresh | `01a11318-5422-7791-affc-0e056568bad6` | Tool acceptance passed |
+| Reused | `01a11319-24e1-7f41-b6f7-231e1a550739` | Tool acceptance passed |
+| Recreated | `01a1131a-6eeb-78f2-9bf4-f2f1c74166f2` | Tool acceptance passed |
+| Fixture trust follow-up | `01a1131b-f9f5-7440-979f-436b4bcad937` | Tool acceptance passed; hook delivery still unverified |
+
+Recreation preserved 16 populated signal/receipt/coordination files, with
+matching hashes and inode identities, and repeat binding passed. The final
+checkpoint contains 24 files. Old failure evidence is retained separately.
+
+A separate **model-free native sandbox helper** ran through the generated
+launcher under both `workspace-write` and explicit `read-only` policies.
+It verified runtime selection, mapped canary presence and canonical reads.
+Workspace-write permitted the three selected write roots and produced real
+retrieval receipts. Both policies denied opening the private credential fixture
+for writing, although the same UID could open it outside the inner sandbox.
+Read-only denied write opens in every selected root. Its read-only child did
+not attempt data writes or receipt-producing retrieval. Canonical-file denial
+also has an image-ownership constraint, reported separately. These are actual
+native sandbox API checks, not model/session or hook evidence.
+
+Hook delivery remains unverified. Native saved messages did not supply the
+exact installed lifecycle/prompt reminders; successful probes obtained their
+session IDs from native environment variables. Registration, project trust and
+tool success do not substitute for native hook-delivery evidence. Claude and
+Copilot still lack designated container authentication; Windows-host mount and
+direct container-local writable-runtime provisioning proof remain outstanding.
+
+Evidence: `.cache/container-launch/seccomp-verified/report.json`, its native
+transcripts/tool reports, `sandbox-helper.json`, `prepare-recreated.json`,
+`docker-security.txt` and `docker-seccomp-provenance.json`. The profile, original
+upstream snapshot, reduction tests and diagnostic script are under
+`.cache/container-launch-proof/`. The test container
+`knowledge-launch-seccomp-proof` is stopped; its image, volume and evidence are
+retained. Starting another test requires the same explicit per-container policy.
+Two earlier task-owned failure volumes were removed for space; the original
+authenticated fixture and exported evidence were preserved.
+
+### Initial native container result
+
+Before the Docker retest, `.cache/container-launch/authenticated/report.json` was
 **partial**. On Debian 13.7/aarch64 with glibc 2.41, all three installed CLIs
 started through the generated launcher; preparation, repeat binding, target
 preservation and container recreation passed. Codex authenticated and completed
