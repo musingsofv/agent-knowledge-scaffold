@@ -472,3 +472,69 @@ def test_new_source_requires_prepare_instead_of_refresh(prepared, tmp_path):
     assert error.value.code == "projection-owner-conflict"
     assert apply(prepared, operation="prepare", source_env_file=source)["status"] == "ok"
     assert target(prepared).read_bytes() == source.read_bytes()
+
+
+def test_remove_recovers_interrupted_publication_pair_and_rejects_unknown_link(prepared, tmp_path):
+    candidate = tmp_path / "reviewed.yaml"
+    candidate.write_bytes(prepared["candidate"])
+    program = """
+import os, sys
+from pathlib import Path
+from agent_knowledge.infrastructure import container_profiles as module
+original = module.os.link
+def interrupted(*args, **kwargs):
+    original(*args, **kwargs)
+    os._exit(23)
+module.os.link = interrupted
+module.prepare_container_profile(operation="prepare", settings=Path(sys.argv[1]),
+    profile="example", candidate=Path(sys.argv[2]).read_bytes(), expected_sha256=None,
+    private_directory=Path(sys.argv[3]), source_env_file=Path(sys.argv[4]))
+"""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            program,
+            str(prepared["settings"]),
+            str(candidate),
+            str(prepared["private_directory"]),
+            str(prepared["source_env_file"]),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 23 and result.stdout == result.stderr == ""
+    assert target(prepared).stat().st_nlink == 2
+    detached = yaml.safe_load(prepared["candidate"])
+    del detached["profiles"]["example"]["environment"]
+    removal = dict(
+        operation="remove", candidate=yaml.safe_dump(detached).encode(), source_env_file=None
+    )
+    extra = tmp_path / "unknown-link"
+    os.link(target(prepared), extra)
+    with pytest.raises(AdapterError, match="private regular"):
+        apply(prepared, **removal)
+    assert extra.exists() and not prepared["settings"].exists()
+    extra.unlink()
+    assert apply(prepared, **removal)["projection"] == "removed"
+    assert not target(prepared).exists()
+    assert not list(prepared["private_directory"].glob("*.tmp"))
+    assert prepared["source_env_file"].exists()
+
+
+@pytest.mark.parametrize("missing", ["workspace.yaml", "catalog.yaml", "knowledge"])
+def test_remove_default_profile_projection_without_knowledge_mount(prepared, missing):
+    value = yaml.safe_load(prepared["candidate"])
+    value["default_profile"] = "example"
+    prepared["candidate"] = yaml.safe_dump(value).encode()
+    apply(prepared)
+    unavailable = prepared["settings"].parent / "knowledge-instance" / missing
+    unavailable.rename(unavailable.with_name("unmounted"))
+    del value["profiles"]["example"]["environment"]
+    result = apply(
+        prepared, operation="remove", candidate=yaml.safe_dump(value).encode(), source_env_file=None
+    )
+    assert result["projection"] == "removed"
+    assert not target(prepared).exists()
+    assert yaml.safe_load(prepared["settings"].read_bytes())["default_profile"] == "example"

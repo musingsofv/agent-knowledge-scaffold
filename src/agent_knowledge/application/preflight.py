@@ -122,6 +122,18 @@ def run_preflight(
         exit_code = max(exit_code, exit_status)
         diagnostics.append(Diagnostic(code, field, message, remediation))
 
+    def same_route(first: Path, second: Path) -> bool:
+        try:
+            return first.resolve() == second.resolve()
+        except (OSError, RuntimeError):
+            failed(
+                "runtime-path-unavailable",
+                "runtime",
+                "A runtime path cannot be resolved safely.",
+                "Inspect path permissions and symlink loops before relaunching.",
+            )
+            return False
+
     if parsed.expected_execution is not None:
         if execution.observed != parsed.expected_execution:
             readiness["execution"] = "not-ready"
@@ -146,8 +158,8 @@ def run_preflight(
     current_venv = Path(sys.prefix)
     target_venv = expected_venv or selected_venv or current_venv
     if (
-        expected_venv and selected_venv and expected_venv.resolve() != selected_venv.resolve()
-    ) or current_venv.resolve() != target_venv.resolve():
+        expected_venv and selected_venv and not same_route(expected_venv, selected_venv)
+    ) or not same_route(current_venv, target_venv):
         readiness["runtime"] = "not-ready"
         failed(
             "runtime-venv-mismatch",
@@ -162,7 +174,7 @@ def run_preflight(
         expected = bin_dir / (name + ".exe" if os.name == "nt" else name)
         actual = executable_path(name)
         available = available_executable(expected)
-        matches = actual is not None and Path(actual).resolve() == expected.resolve()
+        matches = actual is not None and same_route(Path(actual), expected)
         launchers[name] = {
             "expected": str(expected),
             "available": available,

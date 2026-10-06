@@ -63,7 +63,7 @@ def main() -> int:
             )
         )
         return 2
-    result["launch_allowed"] = result["status"] == "ok"
+    result["launch_allowed"] = result["status"] == "ok" and args.operation != "remove"
     print(json.dumps(result, sort_keys=True))
     return 0 if result["status"] == "ok" else 3
 

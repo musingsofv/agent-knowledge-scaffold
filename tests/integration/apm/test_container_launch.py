@@ -135,3 +135,38 @@ def test_setup_launch_recipe_keeps_blank_credentials_pending(tmp_path):
         hooks_ready=True,
     )
     assert report["providers"]["codex"] == {"status": "pending", "argv": None}
+
+
+@pytest.mark.parametrize("path", [None, ""])
+def test_absent_path_never_adds_consumer_directory(launch_fixture, monkeypatch, path):
+    module, report, _, _ = launch_fixture
+    if path is None:
+        monkeypatch.delenv("PATH", raising=False)
+    else:
+        monkeypatch.setenv("PATH", path)
+    _, environment, _ = module.prepare_launch(report, "codex", [])
+    assert environment["PATH"] == report["launch"]["path_prepend"]
+
+
+@pytest.mark.parametrize("evidence", ["skills", "lock", "deployed-files", "unknown-lock"])
+def test_managed_install_preserves_skills_only_target(tmp_path, evidence):
+    setup = _setup_module()
+    if evidence == "skills":
+        (tmp_path / ".claude/skills/local").mkdir(parents=True)
+    else:
+        content = {
+            "lock": (
+                "deployments:\n- kind: project-relative\n  target: claude\n"
+                "  value: .claude/skills/local/SKILL.md\n"
+            ),
+            "deployed-files": (
+                "dependencies:\n- deployed_files:\n"
+                "    .claude/skills/local/SKILL.md: sha256:fixture\n"
+            ),
+            "unknown-lock": "deployments: [{target: claude}]\n",
+        }[evidence]
+        (tmp_path / "apm.lock.yaml").write_text(content)
+    with pytest.raises(setup.SetupFailure):
+        setup._guard_managed_targets(tmp_path, ("codex",))
+    if evidence != "unknown-lock":
+        setup._guard_managed_targets(tmp_path, ("codex", "claude"))

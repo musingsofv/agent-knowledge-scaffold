@@ -44,7 +44,8 @@ def prepare_launch(report: dict, provider: str, arguments: list[str]) -> tuple[l
     if not all(isinstance(p, str) and Path(p).is_absolute() for p in (cwd, runtime_bin)):
         raise LaunchFailure("Launch recipe requires absolute consumer/runtime paths.")
     environment = os.environ.copy()
-    environment["PATH"] = runtime_bin + os.pathsep + environment.get("PATH", "")
+    inherited_path = environment.get("PATH")
+    environment["PATH"] = runtime_bin + (os.pathsep + inherited_path if inherited_path else "")
     registry = recipe.get("settings")
     if registry is not None:
         if not isinstance(registry, str) or not Path(registry).is_absolute():

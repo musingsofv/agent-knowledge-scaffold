@@ -86,6 +86,11 @@ environment (or removing a non-default selected profile). It removes only verifi
 setup-owned private artifacts. Host originals, unrelated entries, knowledge,
 signal/activity/receipt state and provider sessions remain untouched. Changed or
 unsafe ownership requires inspection, not permission to unlink.
+Removal validates registry declarations and owned file identities without opening
+the knowledge workspace, so an unavailable mount does not prevent revocation.
+It does not certify a replacement environment or permit a new launch; run setup
+and preflight for any replacement route. Interrupted publication's two journaled
+names can be recovered; unknown hard links remain an ownership error.
 
 After preparation, continue the owned runtime/APM/bind sequence and save its new
 launch report. Run the [actual-launcher acceptance](containers.md#one-acceptance-sequence-through-that-launcher).

@@ -967,10 +967,39 @@ def _guard_managed_targets(consumer: Path, targets: tuple[str, ...]) -> None:
         "claude": consumer / "CLAUDE.md",
         "copilot": consumer / ".github/copilot-instructions.md",
     }
+    skill_paths = {
+        "codex": consumer / ".agents/skills",
+        "claude": consumer / ".claude/skills",
+        "copilot": consumer / ".github/skills",
+    }
+    recorded: set[str] = set()
+    lock = consumer / "apm.lock.yaml"
+    if lock.exists():
+        try:
+            lines = lock.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as error:
+            raise SetupFailure("apm-targets-unverified", "Cannot inspect existing APM targets.",
+                               [], remediation="Use the repository-owned prepare/install/bind flow.") from error
+        # APM's generated block layout can be inspected before a Python/YAML
+        # runtime exists. Unknown layouts fail closed into the owned workflow.
+        blocks = _deployment_blocks(lines)
+        if any(line.startswith("deployments:") for line in lines):
+            declared = [_first_lock_scalar(block, "target") for block in blocks]
+            if any(target not in _TARGET_ORDER for target in declared) or (
+                not blocks and "deployments: []" not in lines
+            ):
+                raise SetupFailure("apm-targets-unverified", "Cannot establish the APM target set.",
+                                   [], remediation="Use the repository-owned prepare/install/bind flow.")
+            recorded.update(target for target in declared if target is not None)
+        for target, path in skill_paths.items():
+            relative = path.relative_to(consumer).as_posix() + "/"
+            if any(relative in line for line in lines):
+                recorded.add(target)
     omitted = [
         target for target in _TARGET_ORDER
         if target not in targets
-        and (_active_hook_path(consumer, target).exists() or instruction_paths[target].exists())
+        and (target in recorded or _active_hook_path(consumer, target).exists()
+             or instruction_paths[target].exists() or skill_paths[target].exists())
     ]
     if omitted:
         raise SetupFailure(

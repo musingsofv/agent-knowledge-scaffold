@@ -186,7 +186,7 @@ def _identity(value: os.stat_result) -> tuple[int, ...]:
     return value.st_dev, value.st_ino, value.st_size, value.st_mtime_ns, value.st_ctime_ns
 
 
-def _private_stat(directory: int, name: str) -> os.stat_result | None:
+def _private_stat(directory: int, name: str, *, links: int = 1) -> os.stat_result | None:
     try:
         value = os.stat(name, dir_fd=directory, follow_symlinks=False)
     except FileNotFoundError:
@@ -195,7 +195,7 @@ def _private_stat(directory: int, name: str) -> os.stat_result | None:
         not stat.S_ISREG(value.st_mode)
         or value.st_uid != os.getuid()
         or stat.S_IMODE(value.st_mode) != 0o600
-        or value.st_nlink != 1
+        or value.st_nlink != links
     ):
         raise _error(
             "projection-file-unsafe", Path(name), "Owned files must be private regular files."
@@ -314,13 +314,25 @@ def _invalidate(directory: int, target: str, state: _Projection) -> None:
 
 def _check_owned(directory: int, target: str, state: _Projection) -> None:
     """Refuse replaced ownership before a removal edits the registry."""
+    links = 1
+    if state.target_identity is None and state.temporary and state.temporary_identity:
+        # Publication briefly owns two names for one inode. Only this exact
+        # journaled pair may have two links; unknown additional links still fail.
+        try:
+            published = os.stat(target, dir_fd=directory, follow_symlinks=False)
+            temporary = os.stat(state.temporary, dir_fd=directory, follow_symlinks=False)
+        except FileNotFoundError:
+            pass
+        else:
+            if _identity(published)[:2] == _identity(temporary)[:2] == state.temporary_identity:
+                links = 2
     for name, identity in (
         (target, state.target_identity or state.temporary_identity),
         (state.temporary, state.temporary_identity),
     ):
         if name is None:
             continue
-        value = _private_stat(directory, name)
+        value = _private_stat(directory, name, links=links)
         if value is not None and (
             identity is None or _identity(value)[: len(identity)] != identity
         ):
@@ -408,7 +420,9 @@ def prepare_container_profile(
     selected = _checked_candidate(settings, candidate, current, profile, operation)
     private = _absolute(private_directory) if private_directory is not None else None
     environment = (
-        _candidate_environment(settings, candidate, profile, private) if selected else None
+        _candidate_environment(settings, candidate, profile, private)
+        if selected and operation != "remove"
+        else None
     )
     report: dict[str, object] = {
         "schema": "container-profile-preparation.v1",
@@ -499,7 +513,15 @@ def prepare_container_profile(
                     )
                 state = _Projection(_SCHEMA, str(settings), profile, str(source or ""))
             if operation == "remove":
-                readiness = _readiness(environment)
+                # Revocation must work even when the knowledge mount or replacement
+                # environment is unavailable. Candidate declarations were validated
+                # above; this operation does not certify a replacement launch route.
+                readiness = {
+                    "status": "unverified"
+                    if selected and selected.environment
+                    else "not-configured",
+                    "missing": [],
+                }
                 _check_owned(directory, target.name, state)
                 # Detach the registry route before deleting its owned private file.
                 if candidate != current:

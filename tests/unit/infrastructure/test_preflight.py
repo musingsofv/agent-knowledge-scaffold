@@ -99,24 +99,66 @@ def test_inaccessible_registration_is_unavailable_without_unhandled_error(monkey
 
 
 @pytest.mark.parametrize(
-    "body,outcome",
+    "output,returncode,outcome",
     [
-        ("printf docker", "container"),
-        ("printf none; exit 1", "inconclusive"),
-        ("printf do-not-expose-fixture-value", "inconclusive"),
-        ("while :; do printf excessive-output; done", "unavailable"),
+        (b"docker", 0, "container"),
+        (b"none", 1, "inconclusive"),
+        (b"do-not-expose-fixture-value", 0, "inconclusive"),
     ],
 )
-def test_detector_output_and_wait_are_bounded(tmp_path, monkeypatch, body, outcome):
+def test_detector_classification_and_output_privacy(monkeypatch, output, returncode, outcome):
+    from unittest.mock import MagicMock
+
+    process = MagicMock()
+    process.__enter__.return_value = process
+    process.returncode = returncode
+    process.poll.return_value = returncode
+    selector = MagicMock()
+    selector.__enter__.return_value = selector
+    selector.select.return_value = [object()]
+    monkeypatch.setattr(preflight.shutil, "which", lambda _: "/fixture/detector")
+    monkeypatch.setattr(preflight.subprocess, "Popen", lambda *a, **kw: process)
+    monkeypatch.setattr(preflight.selectors, "DefaultSelector", lambda: selector)
+    monkeypatch.setattr(preflight.os, "read", lambda fd, size: output)
+    result = preflight._detect_virt()
+    assert result.outcome == outcome
+    assert "do-not-expose-fixture-value" not in result.detail
+    selector.select.assert_called_once_with(timeout=0.5)
+    process.wait.assert_called_once_with(timeout=0.5)
+
+
+@pytest.mark.parametrize("stage", ["read", "wait"])
+def test_detector_deadline_kills_child_without_output_leak(monkeypatch, stage):
+    import subprocess
+    from unittest.mock import MagicMock
+
+    process = MagicMock()
+    process.__enter__.return_value = process
+    process.poll.return_value = None
+    if stage == "wait":
+        process.wait.side_effect = [subprocess.TimeoutExpired("fixture", 0.5), 0]
+    selector = MagicMock()
+    selector.__enter__.return_value = selector
+    selector.select.return_value = [] if stage == "read" else [object()]
+    monkeypatch.setattr(preflight.shutil, "which", lambda _: "/fixture/detector")
+    monkeypatch.setattr(preflight.subprocess, "Popen", lambda *a, **kw: process)
+    monkeypatch.setattr(preflight.selectors, "DefaultSelector", lambda: selector)
+    monkeypatch.setattr(preflight.os, "read", lambda fd, size: b"do-not-expose-fixture-value")
+    result = preflight._detect_virt()
+    assert result.outcome == "unavailable"
+    assert "do-not-expose-fixture-value" not in result.detail
+    process.kill.assert_called_once()
+
+
+def test_noisy_real_detector_is_bounded_and_its_output_is_private(tmp_path, monkeypatch):
     import os
 
     if os.name == "nt":
         pytest.skip("POSIX detector fixture")
     program = tmp_path / "detect"
-    program.write_text("#!/bin/sh\n" + body + "\n")
+    program.write_text("#!/bin/sh\nwhile :; do printf excessive-output; done\n")
     program.chmod(0o700)
     monkeypatch.setattr(preflight.shutil, "which", lambda name: str(program))
     result = preflight._detect_virt()
-    assert result.outcome == outcome
-    assert "do-not-expose-fixture-value" not in result.detail
+    assert result.outcome == "unavailable"
     assert "excessive-output" not in result.detail

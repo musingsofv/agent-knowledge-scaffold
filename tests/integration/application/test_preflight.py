@@ -244,3 +244,19 @@ def test_missing_registration_is_visible_and_never_created(configured):
     assert result.exit_code == 2
     assert result.hooks["file_available"] is False
     assert list(consumer.iterdir()) == []
+
+
+@pytest.mark.parametrize("route", ["venv", "launcher"])
+def test_path_resolution_failure_reports_diagnostic_without_writes(configured, monkeypatch, route):
+    config, _, _, _ = configured
+    loop = config.parent / "loop"
+    loop.symlink_to(loop)
+    monkeypatch.setattr(doctor, "_probe", lambda _: pytest.fail("Invalid runtime route wrote"))
+    request = {"mode": "write"}
+    if route == "venv":
+        request["expected_venv"] = str(loop)
+    else:
+        monkeypatch.setattr(preflight, "executable_path", lambda _: str(loop))
+    result = preflight.run_preflight(config, request)
+    assert result.exit_code == 2
+    assert any(item.code == "runtime-path-unavailable" for item in result.diagnostics)
