@@ -46,7 +46,7 @@ def test_aliases_coordinate_one_store_and_allow_catalog_content_updates(tmp_path
                     "root": "../knowledge",
                     "catalog": "../catalog.yaml",
                     "publication": {
-                        "repository": "example/knowledge",
+                        "repository": "example/other-knowledge",
                         "base_branch": "main",
                         "branch_prefix": "knowledge/",
                     },

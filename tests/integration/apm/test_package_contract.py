@@ -8,11 +8,14 @@ from pathlib import Path
 
 import yaml
 
+from tests.e2e.skill_catalog_probe import verify_catalog_links
+
 ROOT = Path(__file__).resolve().parents[3]
 PACKAGE = ROOT / "packages" / "knowledge-agent-pack"
 INSTRUCTION = PACKAGE / ".apm" / "instructions" / "agent-knowledge-discovery.instructions.md"
 SETUP = PACKAGE / ".apm" / "skills" / "knowledge-setup"
 COMPOUND = PACKAGE / ".apm" / "skills" / "knowledge-compound"
+UPGRADE = PACKAGE / ".apm" / "skills" / "knowledge-upgrade"
 HOOK = PACKAGE / ".apm" / "hooks" / "knowledge-discovery.json"
 
 
@@ -36,6 +39,7 @@ def test_scaffold_distributes_only_the_core_knowledge_package_and_skills() -> No
     assert {path.parent.name for path in ROOT.glob("packages/*/.apm/skills/*/SKILL.md")} == {
         "knowledge-setup",
         "knowledge-compound",
+        "knowledge-upgrade",
     }
     assert not list(ROOT.glob(".apm/skills/*/SKILL.md"))
     assert {path.name for path in (ROOT / ".apm/instructions").glob("*.instructions.md")} == {
@@ -59,10 +63,11 @@ def test_package_declares_provider_neutral_lifecycle_and_prompt_hooks() -> None:
     assert not (PACKAGE / ".apm" / "hooks" / "scripts").exists()
 
 
-def test_setup_and_compound_skills_are_concise_and_provider_neutral() -> None:
+def test_knowledge_skills_are_concise_and_provider_neutral() -> None:
     for name, path in (
         ("knowledge-setup", SETUP / "SKILL.md"),
         ("knowledge-compound", COMPOUND / "SKILL.md"),
+        ("knowledge-upgrade", UPGRADE / "SKILL.md"),
     ):
         body = path.read_text(encoding="utf-8")
         _, _, frontmatter = body.partition("---\n")
@@ -96,6 +101,7 @@ def test_setup_and_compound_skills_are_concise_and_provider_neutral() -> None:
     )
     assert "knowledge-setup" in all_package_text
     assert "knowledge-compound" in all_package_text
+    assert "knowledge-upgrade" in all_package_text
     assert "agent-knowledge-compound:<workspace_id>" in all_package_text
     assert "knowledge_discovery.py" not in all_package_text
     assert (SETUP / "references" / "codex-scheduled.md").is_file()
@@ -132,19 +138,33 @@ def test_setup_helper_is_standard_library_python_and_script_is_valid() -> None:
         "subprocess",
         "sys",
         "tempfile",
+        "zipfile",
         "typing",
     }
 
 
-def test_package_readme_documents_both_skills_and_setup_flow() -> None:
+def test_package_readme_documents_all_skills_and_setup_flow() -> None:
     readme = (PACKAGE / "README.md").read_text(encoding="utf-8")
     assert "knowledge-setup" in readme
     assert "knowledge-compound" in readme
+    assert "knowledge-upgrade" in readme
     assert "setup_runtime.py" in readme
     assert "pause/remove" in readme
     assert "agent-knowledge-compound:<workspace_id>" in readme
     assert "UserPromptSubmit" in readme
     assert "session ID" in readme
+
+
+def test_skill_references_resolve_after_separating_setup_and_upgrades() -> None:
+    assert (UPGRADE / "references/scaffold-upgrades.md").is_file()
+    assert (SETUP / "references/knowledge-instance.md").is_file()
+    assert not (SETUP / "references/scaffold-upgrades.md").exists()
+    assert not (UPGRADE / "scripts").exists()
+    report = verify_catalog_links(PACKAGE / ".apm/skills")
+    upgrade_links = [
+        link for link in report["local_links"] if link["source"].startswith("knowledge-upgrade/")
+    ]
+    assert any(link["target"].startswith("knowledge-setup/") for link in upgrade_links)
 
 
 def test_runner_help_is_available_without_installing_a_consumer() -> None:

@@ -39,6 +39,46 @@ def inspect_environment(environment: ResolvedProfileEnvironment) -> EnvironmentI
     return EnvironmentInspection(frozenset(_parse_dotenv(_read_private_file(environment))))
 
 
+@dataclass(frozen=True, slots=True)
+class PendingEnvironmentInspection:
+    """Report preparation readiness without retaining assignment values."""
+
+    names: frozenset[str]
+    blank_names: frozenset[str]
+
+
+def inspect_pending_environment(
+    environment: ResolvedProfileEnvironment,
+) -> PendingEnvironmentInspection:
+    """Validate preparation placeholders without making them activation-ready."""
+    return _pending_environment_inspection(_read_private_file(environment))
+
+
+def parse_pending_dotenv_names(data: bytes) -> frozenset[str]:
+    """Validate projected bytes with placeholders allowed only during preparation."""
+    return _pending_environment_inspection(data).names
+
+
+def _pending_environment_inspection(data: bytes) -> PendingEnvironmentInspection:
+    """Reuse strict syntax checks, permitting blank values only during preparation.
+
+    The substituted bytes are transient validation input, never file contents.
+    Duplicate names and malformed later lines still pass through the strict parser.
+    Activation continues to use the unchanged nonempty-value parser.
+    """
+    blank = re.compile(rb"((?:export )?[A-Za-z_][A-Za-z0-9_]*)=\Z")
+    missing: set[str] = set()
+    lines = []
+    for line in data.splitlines():
+        if blank.fullmatch(line):
+            missing.add(line.removeprefix(b"export ")[:-1].decode("ascii"))
+            line += b"preparation-placeholder"
+        lines.append(line)
+    return PendingEnvironmentInspection(
+        parse_dotenv_names(b"\n".join(lines)) - missing, frozenset(missing)
+    )
+
+
 def mapped_environment_values(
     environment: ResolvedProfileEnvironment,
 ) -> tuple[tuple[str, str], ...]:
@@ -528,10 +568,13 @@ def _write_all(descriptor: int, data: bytes) -> None:
 __all__ = [
     "ENVIRONMENT_MAX_BYTES",
     "EnvironmentInspection",
+    "PendingEnvironmentInspection",
     "append_claude_environment",
     "inspect_environment",
+    "inspect_pending_environment",
     "mapped_environment_values",
     "parse_dotenv_names",
+    "parse_pending_dotenv_names",
     "pin_session_environment",
     "shell_environment_exports",
 ]

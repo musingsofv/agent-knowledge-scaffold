@@ -48,6 +48,12 @@ def _parser() -> Parser:
     parser.add_argument("--provider", choices=[provider.value for provider in HookProvider])
     parser.add_argument("--profile", help="Exact profile name resolved when the provider starts.")
     parser.add_argument("--settings", type=Path, help="Explicit local profile registry.")
+    parser.add_argument(
+        "--config", type=Path, help="Explicit workspace for conditional compounding."
+    )
+    parser.add_argument(
+        "--compound-skill", type=Path, help="Setup-verified installed compound skill location."
+    )
     parser.add_argument("--environment-file", type=Path)
     parser.add_argument("--environment-state-directory", type=Path)
     parser.add_argument(
@@ -88,7 +94,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                 profile=args.profile,
                 settings=args.settings,
             )
-        adapted = adapt_payload(_read_payload(), provider=args.provider)
+        payload = _read_payload()
+        adapted = adapt_payload(payload, provider=args.provider)
         if adapted is None:
             return 0
         activation_failed = False
@@ -111,6 +118,33 @@ def main(argv: Sequence[str] | None = None) -> int:
                 # advisory discovery/reflection response.
                 activation_failed = True
         result = render_decision(adapted)
+        if args.compound_skill is not None and adapted.event.event is HookEventType.USER_PROMPT:
+            from agent_knowledge.entrypoints.hooks.compounding import (
+                bounded_compound_context,
+                is_worker_prompt,
+            )
+
+            worker = is_worker_prompt(payload)
+            if not worker or adapted.provider is HookProvider.COPILOT:
+                context = bounded_compound_context(
+                    config=args.config,
+                    settings=args.settings,
+                    profile=args.profile,
+                    skill=args.compound_skill,
+                    provider=adapted.provider.value,
+                    session_id=adapted.event.session_id,
+                    cwd=payload.get("cwd") if isinstance(payload, dict) else None,
+                    worker=worker,
+                )
+                if worker and context is None:
+                    context = (
+                        "Bound compounding worker context unavailable. Report the missing "
+                        "runtime/profile/skill binding to your parent before compounding. "
+                        "Do not infer a selection, enumerate other profiles or substitute "
+                        "a default profile. Discovery/reflection remains available."
+                    )
+                if context is not None:
+                    _append_context(result, context, transformed_prompt=adapted.transformed_prompt)
         if activation_failed:
             _append_activation_failure(result)
         if result:
@@ -243,15 +277,27 @@ def _run_copilot(
 
 def _append_activation_failure(result: dict[str, object]) -> None:
     """Add one value-free remediation to the provider's existing context channel."""
+    _append_context(result, CREDENTIAL_ACTIVATION_FAILURE_MESSAGE)
+
+
+def _append_context(
+    result: dict[str, object], message: str, *, transformed_prompt: str | None = None
+) -> None:
+    """Preserve the original prompt and append to exactly one existing channel."""
+    if transformed_prompt is not None:
+        current = result.get("modifiedTransformedPrompt", transformed_prompt)
+        if isinstance(current, str) and not current.endswith("\n\n" + message):
+            result["modifiedTransformedPrompt"] = current + "\n\n" + message
+        return
     specific = result.get("hookSpecificOutput")
     if isinstance(specific, dict):
         current = specific.get("additionalContext")
         if isinstance(current, str):
-            specific["additionalContext"] = current + "\n\n" + CREDENTIAL_ACTIVATION_FAILURE_MESSAGE
+            specific["additionalContext"] = current + "\n\n" + message
             return
     current = result.get("additionalContext")
     if isinstance(current, str):
-        result["additionalContext"] = current + "\n\n" + CREDENTIAL_ACTIVATION_FAILURE_MESSAGE
+        result["additionalContext"] = current + "\n\n" + message
 
 
 def _hook_environment(path: Path, mappings: Sequence[str]) -> ResolvedProfileEnvironment:

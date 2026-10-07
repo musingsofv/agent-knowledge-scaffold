@@ -10,6 +10,8 @@ Absolute binding remains the default for a single-machine installation.
 1. Install the Python 3.11+ runtime separately in each environment. Keep the venv
    outside a checkout shared by incompatible operating systems. For example, a
    Linux container can use `/opt/agent-knowledge-venv`; its host has its own venv.
+   For image-time provisioning and nonroot post-mount verification, follow
+   [Container setup](containers.md).
 2. Put that environment's venv `bin` on the PATH inherited by the harness.
    A Dockerfile can use `ENV PATH="/opt/agent-knowledge-venv/bin:${PATH}"`.
    Do not assume a desktop app inherits interactive shell startup files.
@@ -44,6 +46,9 @@ profiles:
 ```
 
 Mount credentials privately with mode `0600` and ownership for the runtime user.
+If a designated host mount cannot enforce that contract, use the guarded
+[container profile preparation](container-profiles.md) route; do not weaken
+the runtime reader or assume chmod changed the mounted file's effective mode.
 Use existing profile overrides for environment-specific workspace paths when
 needed. Do not share a Linux venv with a native macOS or Windows process.
 
@@ -57,10 +62,13 @@ python3 /opt/scaffold/packages/knowledge-agent-pack/.apm/skills/knowledge-setup/
   --package /opt/scaffold \
   --venv /opt/agent-knowledge-venv \
   --consumer /workspace/orders-api \
-  --profile work --apm-mode bind --portable-hooks
+  --profile work --runtime-mode existing --apm-mode bind --portable-hooks
 ```
 
-Fresh helper-managed APM installations can use the same flag with
+`--runtime-mode existing` verifies the already provisioned runtime against
+the read-only `--package` input without uv, installation or venv writes.
+Omit it when setup should install the runtime. This choice is independent from
+APM ownership. Fresh helper-managed APM installations can use the same flag with
 `--apm-mode managed`. `prepare` still installs no hooks and leaves binding
 verification pending. Portable binding requires an explicit profile; register a
 profile first for a direct-config installation.
@@ -102,8 +110,41 @@ Run `agent-knowledge --profile work context` and write-mode `doctor` in each
 environment. Verify hooks from a fresh actual harness session too: setup's PATH
 check proves only its own process environment. Repeat bind should leave the
 shared hook files and Copilot deployment hashes unchanged across environments.
+Container users also verify the [actual launcher](containers.md#integrate-the-actual-launcher),
+including native tool-sandbox write access and fresh/reused container paths.
 APM upgrades can restore marker commands, so repeat installation and binding
 with the same mode. Preserve unrelated hooks and repository-owned checks.
+
+## Provider trust and delivery
+
+This check applies to absolute bindings too. Keep four facts separate: package
+registration, trusted project/config discovery, approval of the current hook
+definitions, and actual lifecycle/prompt delivery. Setup, `doctor` and a working
+credential launcher do not establish all four.
+
+Codex CLI 0.160.1 requires separate review of each non-managed hook definition,
+even when its project is trusted and the hook is enabled. After final binding,
+open `/hooks` in that consumer's native CLI session. Review the package entries'
+source paths and commands, then trust those exact definitions through the native
+interface within the existing authorization. Preserve unrelated hook choices.
+Do not auto-trust during setup, fabricate provider trust records or use a
+hook-trust bypass to make acceptance pass. A new or changed definition requires
+review again; unchanged repeat binding does not by itself require new approval.
+Check the installed version's supported behavior rather than assuming every
+Codex release or provider uses this trust model. See the provider's
+[hook trust documentation](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
+
+For Codex 0.160.1, the native app-server `hooks/list` response exposes each
+definition's `sourcePath`, `key`, `currentHash`, `enabled` and `trustStatus`.
+Use it to distinguish an enabled-but-untrusted entry from an approved one;
+the native `/hooks` browser owns the review action. After approval, start a fresh
+session and verify both `SessionStart` and `UserPromptSubmit`. App-server
+`hook/started` and `hook/completed` notifications expose the run's source,
+event, status, context entries and thread/turn identity. Retain bounded evidence
+that the package reminder reached the native context with the actual session
+handle. Registration, generated instructions, assistant echoes or a session ID
+read from the environment alone are not hook-delivery evidence. If the harness
+does not expose enough evidence, report delivery unverified rather than infer it.
 
 ## Linux containers and host mounts
 
@@ -130,3 +171,20 @@ to the same writable knowledge state on the same storage and lock files; moving
 only locks to separate per-process locations would defeat coordination. A
 Linux-volume knowledge checkout can coexist with a host-mounted consumer repo.
 The recorded Docker comparison is in the scaffold's `docs/r8-harness-proof.md`.
+
+
+## Compounding in portable environments
+
+The same prompt hook can request a delegated compound worker when configured
+through [local compounding](local-compounding.md). It resolves the environment's
+explicit profile and registry before checking the shared activity log. Aliases
+and providers sharing a store must agree on one trigger owner and mode. Keep
+signal/activity storage and locks together on proven persistent storage; a new
+container path is not a new compounding owner. Rebinding verifies installed
+compound-resource parity and write readiness but does not implicitly record a
+new trigger agreement. Execute its pending activation command after the
+consumer's final checks; preserve an already matching agreement. Unavailable
+compounding leaves valid base reminders usable with a separate diagnostic.
+Normal harness startup does not
+install packages, bind hooks or reset completion history. Disable automatic
+work through the trigger configuration rather than deleting activity records.

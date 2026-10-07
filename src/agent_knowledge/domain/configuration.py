@@ -43,12 +43,53 @@ class AutomationDefinition:
 
 
 @dataclass(frozen=True, slots=True)
+class CompoundTrigger:
+    """One explicit trigger agreement for the shared signal store."""
+
+    mode: str
+    owner: str
+    interval_seconds: int = 86400
+    retry_seconds: int = 3600
+
+
+def parse_compound_trigger(value: object, path: str = "trigger") -> CompoundTrigger:
+    """Validate bounded local scheduling preferences without consulting a clock."""
+    fields = read_mapping(value, path, {"mode", "owner"}, {"interval_seconds", "retry_seconds"})
+    mode = read_string(fields["mode"], f"{path}.mode")
+    if mode not in {"disabled", "manual", "local-schedule", "prompt"}:
+        raise ValidationError("invalid-value", f"{path}.mode", "Unknown local trigger mode.")
+    owner = read_string(fields["owner"], f"{path}.owner")
+    if len(owner) > 256 or any(ord(char) < 32 or ord(char) == 127 for char in owner):
+        raise ValidationError("invalid-value", f"{path}.owner", "Expected a bounded literal owner.")
+    values = []
+    for field, default in (("interval_seconds", 86400), ("retry_seconds", 3600)):
+        number = fields.get(field, default)
+        if isinstance(number, bool) or not isinstance(number, int) or not 3600 <= number <= 2592000:
+            raise ValidationError(
+                "invalid-value", f"{path}.{field}", "Expected 3600..2592000 seconds."
+            )
+        values.append(number)
+    return CompoundTrigger(mode, owner, *values)
+
+
+def compound_trigger_view(trigger: CompoundTrigger) -> dict[str, object]:
+    """Expose a canonical non-secret trigger mapping."""
+    return {
+        "mode": trigger.mode,
+        "owner": trigger.owner,
+        "interval_seconds": trigger.interval_seconds,
+        "retry_seconds": trigger.retry_seconds,
+    }
+
+
+@dataclass(frozen=True, slots=True)
 class SetupDefinition:
     """Keep first-run bootstrap preferences separate from runtime state."""
 
     venv: str | None = None
     harnesses: tuple[str, ...] = ()
     automation: AutomationDefinition | None = None
+    compounding: CompoundTrigger | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,7 +257,7 @@ def _parse_publication(value: object, path: str) -> Publication:
 
 def _parse_setup(value: object, path: str) -> SetupDefinition:
     """Validate non-secret bootstrap preferences while leaving registration native."""
-    fields = read_mapping(value, path, set(), {"venv", "harnesses", "automation"})
+    fields = read_mapping(value, path, set(), {"venv", "harnesses", "automation", "compounding"})
     venv = read_config_path(fields["venv"], f"{path}.venv") if "venv" in fields else None
     harnesses: tuple[str, ...] = ()
     if "harnesses" in fields:
@@ -252,7 +293,14 @@ def _parse_setup(value: object, path: str) -> SetupDefinition:
                 "invalid-value", f"{path}.automation.timezone", "Timezone cannot contain controls."
             )
         automation = AutomationDefinition(name=name, cadence=cadence, timezone=timezone)
-    return SetupDefinition(venv=venv, harnesses=harnesses, automation=automation)
+    return SetupDefinition(
+        venv=venv,
+        harnesses=harnesses,
+        automation=automation,
+        compounding=parse_compound_trigger(fields["compounding"], f"{path}.compounding")
+        if "compounding" in fields
+        else None,
+    )
 
 
 def _validate_branch(value: str, path: str) -> None:

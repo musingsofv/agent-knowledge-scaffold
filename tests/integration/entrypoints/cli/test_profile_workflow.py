@@ -96,7 +96,6 @@ def test_every_configured_operation_uses_profile_snapshot_and_evidence(
             "run_id": run_id,
             "selected": selected,
             "dispositions": [disposition],
-            "publication_verified": False,
         },
     )
     assert drained["drained"] == [recorded["id"]]

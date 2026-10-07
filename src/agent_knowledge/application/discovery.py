@@ -11,6 +11,7 @@ from agent_knowledge.application.pagination import (
     request_fingerprint,
 )
 from agent_knowledge.domain.catalog import CatalogRecord
+from agent_knowledge.domain.configuration import compound_trigger_view
 from agent_knowledge.domain.discovery import parse_catalog_query, select_catalog
 from agent_knowledge.domain.validation import ValidationError, read_mapping
 from agent_knowledge.infrastructure.configuration import Workspace, effective_configuration
@@ -58,6 +59,7 @@ class SetupView(TypedDict):
     venv: str | None
     harnesses: list[str]
     automation: AutomationView | None
+    compounding: dict[str, object] | None
 
 
 class ReceiptStorageView(TypedDict):
@@ -181,6 +183,9 @@ def context_result(workspace: Workspace, value: object) -> ContextView:
             retention_days=workspace.receipts.retention_days,
         ),
         setup=SetupView(
+            compounding=compound_trigger_view(workspace.definition.setup.compounding)
+            if workspace.definition.setup.compounding
+            else None,
             venv=workspace.definition.setup.venv,
             harnesses=list(workspace.definition.setup.harnesses),
             automation=AutomationView(

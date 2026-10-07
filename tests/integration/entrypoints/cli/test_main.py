@@ -38,6 +38,7 @@ def test_default_describe_does_not_read_stdin_or_require_configuration(
     assert set(result["commands"]) == {
         "describe",
         "doctor",
+        "preflight",
         "context",
         "catalog",
         "search",
@@ -595,3 +596,111 @@ def test_cli_signal_request_errors_are_structured_and_do_not_create_inbox(
     assert "results" not in result
     assert authored.exists()
     assert not (tmp_path / "scaffold/ai").exists()
+
+
+def test_preflight_retains_runtime_when_configuration_missing(tmp_path, capsys):
+    assert main(["--config", str(tmp_path / "missing.yaml"), "preflight"]) != 0
+    result = output(capsys)
+    assert result["schema_version"] == "knowledge-preflight.v1"
+    assert result["status"] == "error"
+    assert result["execution"]["harness_location"] == "unverified"
+    assert result["runtime"]["interpreter"]
+    assert "receipt" not in result
+
+
+@pytest.mark.parametrize("complete", [True, False])
+def test_cli_multi_repository_evidence_drains_only_after_all_owners_publish(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    complete: bool,
+) -> None:
+    from tests.integration.infrastructure.test_compounding import snapshot, stored_signal, workspace
+
+    loaded = workspace(tmp_path)
+    signal = stored_signal(loaded.signal_storage.signal_root / "shared/one.md", "one")
+    selected_snapshot = snapshot(signal)
+    selected = {"id": "one", "path": str(signal), "fingerprint": selected_snapshot.fingerprint}
+    request = tmp_path / "compound.json"
+    request.write_text(
+        json.dumps(
+            {
+                "action": "start",
+                "workspace_id": loaded.definition.workspace_id,
+                "selected": [selected],
+                "harness": "codex",
+                "session_id": "session-1",
+            }
+        )
+    )
+    assert main(["--config", str(loaded.path), "compound", "--request-file", str(request)]) == 0
+    run_id = output(capsys)["run_id"]
+    publications = [
+        {
+            "repository": "example/knowledge",
+            "status": "published",
+            "publication_verified": True,
+            "commit": "a" * 40,
+        },
+        {
+            "repository": "example/consumer",
+            "status": "published",
+            "publication_verified": True,
+            "commit": "b" * 40,
+        },
+        {
+            "repository": "example/second",
+            "status": "published",
+            "publication_verified": complete,
+            "commit": "c" * 40,
+        },
+    ]
+    request.write_text(
+        json.dumps(
+            {
+                "action": "drain",
+                "run_id": run_id,
+                "selected": [selected],
+                "publications": publications,
+                "dispositions": [
+                    {
+                        "signal_id": "one",
+                        "decision": "update",
+                        "rationale": "Published owning procedures and canonical learning.",
+                        "owners": [
+                            {"source": "knowledge", "path": "guidance/example.md"},
+                            {
+                                "repository": "example/consumer",
+                                "path": ".apm/skills/example/SKILL.md",
+                            },
+                            {"repository": "example/second", "path": "docs/procedure.md"},
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    assert main(["--config", str(loaded.path), "compound", "--request-file", str(request)]) == 0
+    result = output(capsys)
+    assert result["drained"] == (["one"] if complete else [])
+    assert result["retained"] == ([] if complete else ["one"])
+    assert signal.exists() is not complete
+
+
+@pytest.mark.parametrize("field", ["publication", "publication_verified"])
+def test_cli_rejects_legacy_compound_publication_fields_without_mutation(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    field: str,
+) -> None:
+    from tests.integration.infrastructure.test_compounding import stored_signal, workspace
+
+    loaded = workspace(tmp_path)
+    signal = stored_signal(loaded.signal_storage.signal_root / "shared/one.md", "one")
+    before = signal.read_bytes()
+    request = tmp_path / "compound.json"
+    request.write_text(json.dumps({"action": "status", field: True}))
+    assert main(["--config", str(loaded.path), "compound", "--request-file", str(request)]) == 2
+    result = output(capsys)
+    assert result["diagnostics"][0]["code"] == "unknown-field"
+    assert result["diagnostics"][0]["path"] == field
+    assert signal.read_bytes() == before

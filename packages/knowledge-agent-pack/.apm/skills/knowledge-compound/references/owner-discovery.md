@@ -54,6 +54,23 @@ sufficient and what independent purpose any additional document serves. Signal
 archives and receipts retain the observation and reasoning without requiring a
 canonical knowledge entry.
 
+Final write-disposition `owners` are the destinations whose authored content
+must change to address the observation. Keep discovery candidates, supporting
+citations and unchanged, already-covered references in the rationale instead
+of creating publication obligations for them. A repository with only future
+product implementation is not a compounding write owner. Never drop a genuine
+authoring obligation merely because its source or publication is unavailable.
+For `keep` or `skip`, owner references support the no-write rationale; they do
+not require a new publication.
+
+An accepted decision can be useful knowledge before implementation. Preserve
+its deferred status, conditions and owning product plan without claiming that
+the behavior is deployed. Once that authoring outcome is validated and
+published, or verified as already covered, its signal can drain. Product plans
+track the remaining implementation; the signal inbox is not a product backlog.
+By contrast, a discovered skill defect whose correction is still unvalidated
+or unpublished remains unresolved even if a knowledge document describes it.
+
 | Observation | Owner |
 | --- | --- |
 | The repository's testing skill calls the wrong npm script | The local skill or its supporting script |
@@ -136,9 +153,26 @@ changes, and validate linked knowledge changes with the knowledge CLI.
 A skill-only update uses the skill repository's authorized publication route
 and native checks. Record an update disposition with that repository/path and
 its publication evidence; the absence of a central change is not a no-write
-outcome. Current drain evidence covers one publication repository per request.
-Keep a signal requiring changes across repositories deferred with the relevant
-proposals and evidence; one repository's publication cannot complete all owners.
+outcome. Use the drain request's `publications` list for repository-specific
+evidence. A combined outcome lists all required authoring destinations and
+matching verified publications, so one signal can be safely completed across
+repositories. The configured source route supplies a knowledge owner's
+repository; a skill/instruction owner names its resolved authoring repository.
+One repository's publication cannot complete another repository's obligation.
+
+Use these acceptance examples when deciding whether authoring is complete:
+
+| Evidence and outcome | Disposition and drain decision |
+| --- | --- |
+| An accepted cache redesign is accurately recorded as deferred, with a link to the implementation plan; the knowledge PR and exact remote commit are verified | `update` for the knowledge owner; eligible to drain despite unfinished product implementation |
+| The same deferred decision is already accurately covered in the effective published knowledge | `keep` with the existing owner and evidence; no new PR or publication entry required |
+| A central runbook and a consumer's release skill both omit a required migration step; both corrections pass their native checks and have verified remote commits/PR heads | `update` naming both owners with one publication entry for each repository; eligible to drain |
+| The runbook is published but the required skill correction remains local or its source cannot be resolved | Retain with the unfinished skill obligation and concrete prerequisite; do not reduce the owner list to the published runbook |
+| A referenced implementation repository needs future product work but no knowledge, skill or instruction correction | Explain its role in the rationale; do not require a compounding PR in that repository |
+
+These examples assume the selected input is still unchanged and all archive,
+intent and file-safety checks pass. The agent evaluates the meaning and verifies
+remote evidence; the CLI checks declared coverage and safe removal.
 
 If the source or publication route is unavailable, or an explicit user
 restriction excludes the change, keep an actionable deferred signal/proposal

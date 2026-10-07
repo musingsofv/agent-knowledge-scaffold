@@ -110,8 +110,8 @@ compounding concurrency test now requires the losing caller to receive
 formatting and mypy checks passed.
 
 Remote APM binding was verified on 2026-09-25 against a real APM 0.29.0 install
-of `musingsofv/agent-knowledge-scaffold/packages/knowledge-agent-pack#main` in
-a disposable consumer. The updated setup helper bound Codex, Claude and
+of the upstream `packages/knowledge-agent-pack#main` remote package in a
+disposable consumer. The updated setup helper bound Codex, Claude and
 Copilot, preserved the portable manifest, reconciled Copilot hashes and remained
 unchanged on repeat bind. Installed provider fixtures passed for all three;
 APM uninstall removed the package hooks while preserving unrelated hooks.
@@ -201,11 +201,12 @@ Provider outcomes are kept separate:
 The command is a provider-native non-interactive/one-shot invocation, which is
 the reproducible equivalent of a durable provider task's **run now** control.
 The repository does not implement a scheduler or mutate provider account state.
-`knowledge-setup` reports scheduling separately per provider. Codex Scheduled
-is a durable native surface. Copilot CLI `/every` and `/after` remain attached
-to an open interactive session, so unattended Copilot compounding needs an
-explicitly authorized external scheduler invoking `copilot -p` or a cloud
-automation.
+`knowledge-setup` reports the selected local trigger separately from hook and
+credential readiness. Codex desktop Scheduled is a durable native surface;
+Codex CLI does not inherit it. Session timers are not durable daily scheduling.
+Current setup uses prompt fallback where no verified durable native local
+surface is available; see [local compounding](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/local-compounding.md).
+The one-shot evidence here predates that fallback and is not live delegation proof.
 
 The 2026-09-21 cross-provider run passed with Codex CLI 0.154.0, Claude Code
 2.1.236 and GitHub Copilot CLI 1.0.86. Each authenticated agent read the
@@ -241,9 +242,10 @@ automatically routed `mai-code-1.1-flash` model was unsupported for parsing;
 the account did not expose the explicit alternative models tried. No Copilot
 schedule was created. Even on an eligible model, `/every` runs only while the
 session is open, resumes its next wait from reopen and does not catch up missed
-recurring runs. Durable unattended Copilot compounding therefore needs an
-explicitly authorized external scheduler invoking `copilot -p` or a Copilot
-cloud automation.
+recurring runs. This historical result does not establish durable recurrence.
+Current setup uses the prompt fallback when no verified durable native local
+schedule exists; no prompt means no run. This does not change the historical
+outcome or establish proof of the newer delegated-worker flow.
 
 ## Live Claude discovery-hook acceptance
 

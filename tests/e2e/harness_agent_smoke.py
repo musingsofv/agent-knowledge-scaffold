@@ -426,7 +426,6 @@ def _prompt(
                 }
             ],
             "dispositions": [json.loads(disposition)],
-            "publication_verified": False,
         },
         separators=(",", ":"),
     )

@@ -44,9 +44,9 @@ def archive_path(workspace: Workspace, run_id: str, snapshot: SignalSnapshot) ->
 
 
 @contextmanager
-def lifecycle_lock(path: Path) -> Iterator[None]:
+def lifecycle_lock(path: Path, *, blocking: bool = True) -> Iterator[None]:
     """Serialize the entire read/validate/archive/remove lifecycle across CLI processes."""
-    with usage_lock(Path(str(path) + ".lock")):
+    with usage_lock(Path(str(path) + ".lock"), blocking=blocking):
         yield
 
 
@@ -129,6 +129,9 @@ def resolved_owners(
                     record["status"] = "unresolved"
                     record["reason"] = "The owner source is not configured in this workspace."
                 else:
+                    record["publication_repository"] = (
+                        source.publication.repository if source.publication is not None else None
+                    )
                     try:
                         path = resolve_document_path(source.root, owner.path)
                         read_bytes(path, max_bytes=MAX_ARTIFACT_BYTES)
@@ -145,35 +148,23 @@ def resolved_owners(
     return result
 
 
-def publication_view(
-    publication: PublicationEvidence | None, *, verified: bool
-) -> dict[str, object]:
+def publication_view(publication: PublicationEvidence) -> dict[str, object]:
     """Never upgrade caller-reported verification into independent proof."""
     return {
-        **({} if publication is None else asdict(publication)),
+        **asdict(publication),
         "verification": "agent-reported",
-        "publication_verified": verified,
-        **(
-            {
-                "status": "unavailable",
-                "unavailable_reason": "Publication evidence was not supplied.",
-            }
-            if publication is None
-            else {}
-        ),
     }
 
 
 def capture_changes(
-    workspace: Workspace, run_id: str, attempt_id: str, publication: PublicationEvidence | None
+    workspace: Workspace, run_id: str, attempt_id: str, publication: PublicationEvidence
 ) -> dict[str, object]:
     """Capture only a bounded local diff between explicitly supplied immutable commits."""
     unavailable: dict[str, object] = {
+        "repository": publication.repository,
         "status": "unavailable",
         "reason": "Exact checkout and before/after commit IDs were not supplied.",
     }
-    if publication is None:
-        return unavailable
     before, after, checkout = (
         publication.before_revision,
         publication.after_revision,
@@ -182,6 +173,7 @@ def capture_changes(
     if before is None or after is None or checkout is None:
         return unavailable
     boundaries: dict[str, object] = {
+        "repository": publication.repository,
         "before_revision": before,
         "after_revision": after,
         "checkout": checkout,
@@ -241,7 +233,8 @@ def capture_changes(
                 }
             output.seek(0)
             raw = output.read(MAX_ARTIFACT_BYTES + 1)
-        relative = "changes/" + attempt_id + ".patch"
+        repository_id = hashlib.sha256(publication.repository.encode()).hexdigest()
+        relative = f"changes/{attempt_id}-{repository_id}.patch"
         write_artifact(run_root(workspace, run_id) / relative, raw)
         return {
             **boundaries,

@@ -214,3 +214,21 @@ def test_disabled_diagnostics_retain_archive_location_and_retention() -> None:
 def test_receipt_policy_rejects_ambiguous_or_invalid_fields(receipts: object) -> None:
     with pytest.raises(ValidationError):
         parse_workspace(workspace_data(receipts=receipts))
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"mode": "cloud"},
+        {"owner": "bad\nowner"},
+        {"retry_seconds": True},
+        {"interval_seconds": 10},
+        {"interval_seconds": 2592001},
+        {"surprise": "field"},
+    ],
+)
+def test_compound_trigger_has_strict_local_configuration(updates: dict[str, object]) -> None:
+    from agent_knowledge.domain.configuration import parse_compound_trigger
+
+    with pytest.raises(ValidationError):
+        parse_compound_trigger({"mode": "prompt", "owner": "shared-store", **updates})

@@ -2,19 +2,24 @@
 name: knowledge-setup
 license: 0BSD
 description: >
-  Set up an organization-neutral knowledge workspace from business context,
-  including runtime, hooks and compounding. Use when onboarding or reconfiguring.
-  Do not use when processing signals; use knowledge-compound.
+  Set up an organization-neutral knowledge workspace, runtime, hooks and compounding.
+  Use for initial adoption or configuration changes.
+  Do not use for upgrades or processing signals.
   Success means validated configuration and reported runtime/automation readiness.
 ---
 
 # Knowledge setup
 
 Use this skill when a consumer adopts the scaffold or changes its business
-context, workspace, runtime or harness targets. Help the developer choose
+context, workspace or harness targets. Help the developer choose
 meaningful knowledge boundaries and vocabulary; derive routine paths and
 runtime values. Setup may create an empty knowledge source. It does not invent
 business facts, copy a corpus or implement a scheduler.
+
+Use [knowledge-upgrade](../knowledge-upgrade/SKILL.md) to integrate upstream or
+refresh an existing runtime/package on hosts or in containers. That skill
+coordinates upgrades using this skill's provisioning and binding mechanisms.
+Use `knowledge-compound` to process signals.
 
 For first use, the developer clones the scaffold and opens that checkout in
 their harness. The agent can read this bundled `SKILL.md` by path before APM
@@ -33,10 +38,11 @@ Read [Configure reviewed knowledge publication](references/publication.md) to
 derive and verify the default GitHub PR destination from the canonical knowledge
 checkout, preserve existing publication choices and report pending access.
 It also establishes standing compounding PR authorization for all participating
-consumers and records their routes in the shared automation; human review and
+consumers and records their routes in the selected local task or authored
+setup context; human review and
 merge remain separate from opening a PR.
 When adopting a fresh scaffold clone, or configuring an existing scaffold-derived
-knowledge instance, read [Scaffold maintenance and upgrades](references/scaffold-upgrades.md)
+knowledge instance, read [Adopt a knowledge instance](references/knowledge-instance.md)
 before selecting publication. It owns conversion of the clone into one instance
 checkout with `origin` for the user's repository and `scaffold` for updates,
 plus the central maintainer instruction. Do not infer that role from the
@@ -52,6 +58,17 @@ For shared checkouts or hooks committed for multiple environments, read
 explicit profile, provision the runtime and registry locally in each environment,
 and verify PATH in the harness process. Do not bind a shared checkout to one
 machine's absolute paths or put credentials in committed configuration.
+For a developer-owned Docker/devcontainer image, also read
+[Container setup](references/containers.md). Preserve their base image, user,
+tools and startup commands. Separate image-time runtime provisioning from
+post-mount workspace/profile/APM binding; no mandatory scaffold image is needed.
+Before choosing paths, establish where the current tools and intended harness
+execute. Use the container reference's detection procedure; Linux or a
+workspace-looking path alone is insufficient. Report host or uncertain location
+before dependent changes. A host agent using `docker exec` has not established
+that its harness runs inside the container. Prepare the local profile and exact
+launch integration, then verify through that launcher. Ordinary launches perform
+preflight; installation/compilation and binding recur only for relevant changes.
 
 1. Resolve the intended workspace path, suggesting
    `<current checkout>/knowledge-workspace.yaml` when not supplied. Inspect
@@ -79,7 +96,7 @@ machine's absolute paths or put credentials in committed configuration.
 4. Confirm those meaningful choices together before writing configuration or
    registering vocabulary. Existing user approval carries forward; an unchanged
    setup does not need another interview. For fresh adoption, establish and
-   verify the user's repository and both remotes using the scaffold-upgrades
+   verify the user's repository and both remotes using the knowledge-instance
    reference before authoring publication settings. Register confirmed new
    concepts when necessary, then create or complete the catalog and workspace
    YAML using the defaults below. Empty catalogs are supported; an unknown ID in
@@ -96,12 +113,12 @@ machine's absolute paths or put credentials in committed configuration.
 6. For a verified scaffold-derived knowledge instance, persist its brief
    central-maintainer route in that checkout's authored APM source, including
    its verified upstream URL/name, then regenerate and check its harness outputs
-   using the scaffold-upgrades reference. This is distinct from the consumer's
+   using the knowledge-instance reference. This is distinct from the consumer's
    profile recommendation. Reuse existing authorization and equivalent routing;
    report an unresolved source owner, upstream or ancestry as pending rather
    than guessing or creating a history baseline automatically.
 7. Finish fresh adoption by reviewing and publishing the instance's non-secret
-   bootstrap files through the scaffold-upgrades reference. Verify the catalog
+   bootstrap files through the knowledge-instance reference. Verify the catalog
    and maintainer instructions reach the remote base branch before declaring
    the shared instance ready; an initial push of untouched scaffold files is
    not a published setup.
@@ -111,9 +128,9 @@ The skill owns these defaults and does not ask the developer to supply them:
 | Value | Default and behavior |
 | --- | --- |
 | Profile label/registry | Suggest a lowercase business/project label in `~/.config/agent-knowledge/config.yaml`; confirm it with the meaningful choices. Propose the first as default; preserve later defaults. Use the profile reference for reviewed atomic edits. |
-| Knowledge instance | Reuse one adopted scaffold clone. Suggest a private repository named `knowledge` under the confirmed owner; `origin` publishes there and `scaffold` fetches the verified upstream. Preserve existing repositories and paths; follow the scaffold-upgrades reference before publication. |
+| Knowledge instance | Reuse one adopted scaffold clone. Suggest a private repository named `knowledge` under the confirmed owner; `origin` publishes there and `scaffold` fetches the verified upstream. Preserve existing repositories and paths; follow the knowledge-instance reference before publication. |
 | Project profile recommendation | For named-profile onboarding, persist the selected name and registry location once in the consumer's existing authored instruction source, then regenerate and verify its harness projections. Preserve an equivalent recommendation; resolve a conflicting one before replacing it. An explicit session choice still takes priority. |
-| Profile environment | Optional. Suggest the developer's absolute home path ending in `.config/agent-knowledge/<profile>.env`, mode `0600`, and mappings such as `github: GITHUB_V_TOKEN -> GH_TOKEN` when existing tool needs justify them. Expand `~` before authoring because registry paths are literal. Preserve an existing path/mapping. Never ask the developer to paste values into chat, copy values into YAML or create guessed credentials. |
+| Profile environment | Optional. Suggest the developer's absolute home path ending in `.config/agent-knowledge/<profile>.env`, mode `0600`, and mappings such as `github: WORK_GITHUB_TOKEN -> GH_TOKEN` when existing tool needs justify them. Expand `~` before authoring because registry paths are literal. Preserve an existing path/mapping. Never ask the developer to paste values into chat, copy values into YAML or create guessed credentials. |
 | Workspace identity | Preserve an existing ID. For a new file, derive a stable `workspace:<directory-slug>` from the configuration's durable parent and persist it. This identifies the setup; it does not claim organizational membership. |
 | Source roots/catalogs | Preserve the selected configuration. For a new file, scaffold one empty source at `<scaffold>/knowledge` with `<scaffold>/catalog.yaml`. Additional sources remain an explicit configuration edit. |
 | Producer code root | Derive the durable code-root parent from the current Git checkout/common directory; fall back to the scaffold's parent when no Git association is available. When the scaffold checkout itself can produce signals, its resolved path must be strictly below `code_root`: `scaffold_root: .` therefore pairs with `code_root: ..`, never `code_root: .`. The origin check still reports an unsafe mapping rather than guessing a project. |
@@ -121,7 +138,7 @@ The skill owns these defaults and does not ask the developer to supply them:
 | Usage evidence | Enable diagnostic receipts with 30-day retention at `<scaffold>/ai/usage`; create this directory, keep it outside canonical sources and the signal inbox, and ignore it in Git. Preserve an existing policy/path. |
 | Runtime virtual environment | `<scaffold>/.agent-knowledge-venv`; create or reuse it and ensure that path is ignored by the scaffold. |
 | Harness targets | `codex`, `claude` and `copilot` in that order. Install/compile and bind those targets by default; preserve an explicit user or consumer target restriction with `--targets`. Use `--apm-mode prepare` when consumer installation is intentionally deferred. Automation being paused or unavailable never means passing an empty target list. Report unavailable or unauthenticated providers without asking the developer to choose a subset. |
-| Automation | Name `knowledge-compound`, cadence `daily`, and the local system timezone where the provider offers durable scheduling. Treat provider-limited session schedules separately. |
+| Compounding trigger | One owner per shared signal store. Prefer verified durable native local scheduling (`knowledge-compound`, daily, local timezone); otherwise select prompt fallback with a rolling 24-hour interval and one-hour retry. Preserve explicit manual/disabled choices. Session-only timers are not durable schedules. |
 | Publication | GitHub PRs by default. Derive the destination from the canonical knowledge checkout's verified remote, use its verified default branch and prefix `knowledge/`, and write the explicit source publication block. Preserve approved settings and explicit local-only choices. Missing destination/access is pending; follow the publication reference. |
 
 Reuse registered IDs and preserve the selected configuration. New catalog IDs
@@ -173,15 +190,26 @@ Use a durable primary checkout or a deliberately non-project scaffold; do not
 place the inbox in a temporary linked worktree.
 
 Before reporting a fresh setup ready, resolve `scaffold_root` and `code_root`
-from the configuration file and prove that the checkout which will originate
-signals is strictly below `code_root`. Equality is invalid because it cannot
-produce a stable relative project identity. Run one session-filtered
-`signal list` from that checkout as part of readiness; repair the derived path
-if it reports `origin-outside-code-root`.
+from the selected configuration. Signal origin is derived from the Git checkout
+containing that configuration, not the shell's working directory. For project
+capture, prove that the resolved checkout is strictly below `code_root`;
+equality cannot produce a stable relative project identity. Repair an
+`origin-outside-code-root` result without guessing another project's identity.
+
+When a centrally configured profile deliberately serves multiple consumers,
+use shared capture (`origin.project_path: null`) and retain the actual producing
+repository and concrete paths in signal evidence. Copy the configured scope and
+source sets from `context`; they do not establish canonical applicability.
+Verify capture and session-filtered listing with `include_shared: true` using
+the exact provider session handle. Then verify that the one compounding task
+inventories the shared inbox without a session filter and follows every
+continuation. Changing cwd alone cannot select another consumer's inbox; do not
+create duplicate profiles or jobs to compensate for that assumption.
 
 ## Verify and install the runtime
 
-Resolve the setup script from this skill's own directory. Choose one mode:
+Resolve the setup script from this skill's own directory. Choose the APM
+responsibility independently from runtime provisioning:
 
 | `--apm-mode` | Responsibility |
 | --- | --- |
@@ -209,7 +237,8 @@ python3 /path/to/knowledge-setup/scripts/setup_runtime.py \
   --consumer /work/orders-api
 ~~~
 
-The helper requires uv and an installed CPython 3.11 or newer, creates or reuses
+With `--runtime-mode install` (the default), the helper requires uv and an
+installed CPython 3.11 or newer, creates or reuses
 `<workspace-config-parent>/.agent-knowledge-venv` by default, installs the
 supplied source checkout or wheel, then runs the installed `agent-knowledge`
 describe, context and configured doctor. With `--profile` and optional absolute
@@ -221,6 +250,17 @@ including newer Python versions; do not require a downgrade to 3.11. New
 environments use an installed CPython matching `>=3.11`, without downloading
 Python automatically. If none can be located, ask the developer to install a
 supported version (for example, `uv python install 3.11`) before retrying.
+For an image-provisioned or otherwise managed runtime, choose
+`--runtime-mode existing` with its `--venv`. It verifies the actual interpreter,
+both launchers and payload compatibility against the supplied `--package`
+source/wheel without requiring uv, installing packages or writing into the venv.
+In this mode `--package` is a read-only compatibility input, not an install
+target; a matching version string alone is insufficient. Use portable hooks for
+an immutable runtime. The matching APM package supplies this skill/helper; a
+runtime wheel alone does not contain them. Follow the container reference for
+image-time versus post-mount commands. Neither runtime mode changes the APM
+`managed`, `prepare` and `bind` ownership above.
+
 It targets `codex,claude,copilot` by default. In `managed` mode it
 runs APM install/compile for those targets; in `bind` mode the repository must
 already have done so. APM installs the package-owned discovery
@@ -232,8 +272,9 @@ that file is rewritten, then verifies one registration per requested target
 and includes its path, source marker and resolved launcher command in the JSON
 result. This keeps package-only uninstall safe after setup.
 Review that result: missing registrations fail a binding stage, while `prepare`
-intentionally leaves hooks pending. Configuration, source, runtime and receipt
-failures remain failures. A read-ready workspace with environment-only
+intentionally leaves hooks pending. Configuration, source and runtime failures remain failures. Optional
+compounding write/readiness failures have their own pending result and do not
+prevent otherwise valid discovery/reflection binding. A read-ready workspace with environment-only
 diagnostics can complete runtime and reminder-hook setup; credential activation
 stays pending, without a loader command. `doctor` retains those diagnostics and
 its failing overall status rather than pretending credentials are ready. A
@@ -299,7 +340,7 @@ loaded into the current process. Present one common workflow: **run
 For Claude, setup rebinding is required before the new session; Codex and
 Copilot use the newly reported content-addressed launch command.
 
-## Manage the package-owned discovery hook
+## Manage the package-owned hooks
 
 APM owns the generated hook registrations. In a repository-owned integration,
 perform install/uninstall through its registered commands, then use `bind` and
@@ -320,12 +361,22 @@ not rely on an ambient `PATH` entry for recovered hooks.
 Do not edit another package's hook entry or copy this hook into a second
 provider file.
 
+Binding verifies registration, not provider approval or actual reminder delivery.
+Before reporting hooks ready, follow
+[Provider trust and delivery](references/portable-hooks.md#provider-trust-and-delivery)
+for the installed harness. This applies to absolute and portable bindings. In
+Codex CLI 0.160.1, project trust does not approve individual hook definitions:
+the native `/hooks` review is a separate prerequisite, and changed definitions
+need review again. Keep registration, provider trust and observed lifecycle/prompt
+delivery separate in the completion report; setup never grants trust implicitly.
+
 The generated Codex and Claude records carry APM's `_apm_source` marker and
 contain both `SessionStart` and `UserPromptSubmit`. The lifecycle response
 contains discovery plus reflection; the prompt response contains reflection
-only. Copilot uses native `sessionStart` for startup/resume and
+plus conditional compounding delegation when the selected fallback is due. Copilot uses native `sessionStart` for startup/resume and
 `userPromptTransformed` to append the reflection reminder and exact session ID
-to each model-facing user prompt. Copilot has no model-visible post-compaction
+to each model-facing user prompt, preserving its original content. Its
+conditional compounding reminder uses that same supported context channel. Copilot has no model-visible post-compaction
 event; the next actual user prompt receives the reminder. Repository hooks in
 Copilot prompt mode require that the working folder is already trusted. The
 Copilot record is the package-named
@@ -338,8 +389,8 @@ declared mappings, and starts Codex or Copilot without printing shell exports.
 Codex replaces the launcher process; the launcher supervises Copilot so it can
 remove its private temporary activation file on ordinary exit. Claude's `SessionStart`
 command reads the selected external file through the guarded parser and writes
-only declared exports through `CLAUDE_ENV_FILE`; its prompt hook and both other
-provider hooks remain reminder-only. The setup report gives one-session Codex
+only declared exports through `CLAUDE_ENV_FILE`; the prompt hooks deliver advisory reminders and never activate credentials
+or perform compounding themselves. The setup report gives one-session Codex
 and Copilot CLI launcher commands, enables Copilot's Bash startup support, and
 uses protected internal aliases for native output redaction while restoring
 declared targets only inside Copilot Bash tools. The mapped values do not
@@ -367,72 +418,62 @@ One consumer hook can bind only one credential profile for new local Claude
 sessions at a time. Running setup for another profile changes that binding for
 future sessions while existing sessions retain their private value-free pin.
 The profile named in a recurring-task prompt selects knowledge only; it cannot
-override the shared hook's credential binding. Use a separate consumer/project
-configuration or a provider-native cloud environment for simultaneous Claude
-tasks that need different credential profiles.
+override the shared hook's credential binding. Use separate consumer/project
+configurations and local harness sessions for simultaneous tasks that need
+different credential profiles.
 
-## Configure durable compounding automation
+## Configure local compounding
 
-After runtime/read readiness, signal/receipt write readiness, installed-skill
-availability and the consumer's integration checks pass, inspect the selected
-harness's native automation surface. Check credentials for dependencies that
-the scheduled work actually uses: an unrelated blank service token does not
-block local compounding, but required publication authentication does. A
-pending credential environment cannot supply a working activation command;
-use an already supported native provider environment only when its required
-dependencies are verified. Do not switch to unrelated ambient credentials or
-register a job known to fail. Search for this exact marker:
+Read [Select one local compounding trigger](references/local-compounding.md).
+It owns capability selection, the `setup.compounding` configuration,
+`configure-trigger` reconciliation, shared-store alias coordination, readiness
+and pause/remove behavior. Prefer a verified durable native local schedule;
+otherwise configure the installed prompt fallback. Preserve an explicit
+manual/disabled choice and any working local schedule. The helper binds hooks;
+it does not infer scheduling capability, register account tasks or replace the
+agent's readiness/ownership checks. It verifies that the installed compound
+skill and references match the APM package owning the helper. A stale skill tree,
+trigger conflict or unavailable compounding writes stays separately pending;
+valid discovery/reflection bindings still proceed.
 
-~~~text
-agent-knowledge-compound:<workspace_id>
-~~~
+For prompt-triggered compounding, native subagents are the execution interface;
+the hook supplies the scheduling fallback. Missing native subagent tools leave
+that mode pending. Do not substitute a shell-started model CLI. Follow the
+shared reference's exact worker marker and native handoff procedure.
 
-Compare resolved storage and routes as described in the profile reference.
-There must be one automation owner for each signal store, including equivalent
-profile aliases across providers. If the marker already
-exists, update that task in place. If multiple tasks claim the same marker,
-stop and ask the developer which one to keep. Do not create a second task.
-Show how the provider pauses and removes the task, and leave those controls
-visible in the setup report.
+The helper never implicitly runs `configure-trigger`. If prerequisites pass but
+no agreement is recorded, use the report's pending activation command and request
+only after final consumer checks pass. Execute it as the next authorized setup
+step, without introducing another approval gate. Then verify the agreement and
+due status. A matching existing agreement is preserved during rebind; no new
+owner or completion history is created. Resource/readiness failures need their
+reported repair, followed by rebind and affected checks, before activation.
 
-Use the provider reference for the selected harness. Codex Scheduled is a
-durable provider-owned task surface. For other providers, follow the capability
-boundary in their reference and report `provider-limited` instead of claiming
-successful native registration. The task prompt should be short, stable and
-explicit:
+Use the reference for the actual harness:
 
-~~~text
-Run the installed knowledge-compound skill using
-/work/knowledge/.agent-knowledge-venv/bin/agent-knowledge with
---settings /work/local/profiles.yaml --profile work on every configured call. Process pending signals for this
-workspace, follow its publication and drain policy, and report the run,
-dispositions and retained/drained inputs. Do not merge PRs or force-push.
-~~~
+- [Codex](references/codex-scheduled.md): desktop Scheduled and CLI are different
+  surfaces; CLI alone uses the fallback.
+- [Claude Code](references/claude-scheduled.md): session-only timers are not
+  durable scheduling; use the fallback unless a durable local surface is verified.
+- [Copilot CLI](references/copilot-scheduled.md): `/every` and `/after` are
+  session-scoped conveniences; use the fallback when durable local scheduling
+  is unavailable.
 
-Add the marker to the task name or provider metadata, not to a secret or a
-knowledge claim. Preserve the harness name, absolute config/runtime paths and
-the provider's opaque automation/session handle when the provider exposes one.
-For every provider, include the verified consumer routes and standing PR policy
-from [publication setup](references/publication.md#include-every-participating-consumer).
-Update that list when another consumer joins the shared store. Remove stale
-agent-authored demands for separate publication permission that conflict with
-the user's authorization; preserve explicit user exceptions. This policy lets
-the task present PRs for review instead of stopping before it has a proposal.
-The recurring task invokes knowledge-compound; it does not run APM compilation
-or a repository daemon.
+The selected trigger invokes the installed compound skill. Detailed owner
+discovery, validation, PR review and safe drainage stay there. Include verified
+consumer routes and the standing PR policy from
+[publication setup](references/publication.md#include-every-participating-consumer)
+in the task or authored setup context passed to the worker. Do not narrow a
+shared store to the launching consumer or introduce another publication opt-in.
+Keep explicit user restrictions and exact provider handles when available.
 
-Trigger one run-now or one-shot execution before declaring that provider's
-automation complete. The
-verification should reach the installed skill and configured doctor, record
-activity/session provenance when available, and report retained or drained
-inputs. It does not need to create a production PR. If the provider lacks
-durable native automation or requires unavailable authentication, report the
-provider limitation and leave the workspace and signals unchanged. For Copilot
-CLI, `/every` and `/after` are session-scoped conveniences rather than durable
-unattended automation; recommend an explicitly authorized external scheduler
-that invokes `copilot -p`, such as GitHub Actions, or a Copilot cloud automation.
-Never create a remote workflow without user confirmation, and never silently
-substitute a daemon, cron loop, launchctl mutation or hidden background process.
+Verify the selected mode before reporting it ready. For native scheduling,
+use its run-now surface subject to any explicit pause on that proof. For the
+fallback, verify an ordinary prompt delegates, the worker records a terminal
+result, and a later prompt does not start another run. Installed fixtures do not
+prove live delegation. Report missing access/capability as pending while
+preserving working discovery/reflection and the developer's prompt. Do not run APM installation, native builds or product tests as routine
+compounding; an actual authorized owner change still requires its native checks.
 
 ## Completion report
 
@@ -451,11 +492,17 @@ Harness activation:
   Copilot: /absolute/generated/profile-launcher.sh copilot
 Usage:     /work/knowledge/ai/usage (diagnostics enabled, 30-day retention)
 Sources:   example-knowledge; scopes org:example, group:commerce, repo:orders-api
-Harness:   codex (native Scheduled task, daily at 09:00 Europe/London)
-Automation: agent-knowledge-compound:workspace:example
+Harness:   codex CLI (verified prompt hook)
+Trigger:   prompt; rolling 24 hours; failed-attempt retry one hour
+Owner:     agent-knowledge-compound:workspace:example
+Pause:     set mode manual and reconcile configure-trigger
+Remove:    use the consumer-owned APM uninstall; retain signals/activity
+Activation: recorded agreement, or exact pending command after consumer checks
+Resources: compound skill/reference parity verified, or precise pending repair
+Live proof: report actual worker/terminal/repeat-prompt evidence separately
 Publication: example/knowledge, base main, branch prefix knowledge/
 
-The setup is ready to run once now. Future runs invoke knowledge-compound;
+Report each readiness dimension and missing proof. Future runs invoke knowledge-compound;
 they do not merge PRs or drain signals unless publication/disposition is verified.
 ~~~
 
@@ -475,7 +522,8 @@ are intentionally unfinished, not valid credentials: preserve strict literal
 parsing, offer no activation command, and never insert fake values or use
 ambient credentials to make checks pass. After the developer fills the private
 file, rerun the same profile-selected `bind` or `managed` command, rerun the
-consumer's checks, then start a new harness session. Automation readiness is a
-separate per-provider result: complete only when the developer can locate,
-pause and remove the durable task and can rerun doctor from that task's harness;
-otherwise report the exact provider limitation or missing prerequisite.
+consumer's checks, then start a new harness session. Trigger readiness is separate from hook binding. Report the selected mode,
+shared-store owner and pause/remove controls. For native scheduling, verify the
+durable task and doctor from its harness; for prompt fallback, verify actual
+delegation, terminal activity and repeat-prompt suppression. Report each missing
+prerequisite or live-proof gap without marking fixture results as live proof.

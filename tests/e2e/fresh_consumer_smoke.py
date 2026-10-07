@@ -19,6 +19,7 @@ from provider_hook_smoke import _context_channels, _fixtures, run_provider_hook_
 
 _PACKAGE_HOOK_SOURCE = "_local/knowledge-agent-pack"
 _DESCRIPTOR_HOOK_COMMAND = "agent-knowledge-hook"
+_KNOWLEDGE_SKILLS = ("knowledge-setup", "knowledge-compound", "knowledge-upgrade")
 
 
 class SmokeFailure(RuntimeError):
@@ -161,6 +162,47 @@ def _run_json(
 def _assert(condition: bool, message: str) -> None:
     if not condition:
         raise SmokeFailure(message)
+
+
+def _skill_resource_proof(
+    package_root: Path, installed_package: Path, consumer: Path
+) -> tuple[Path, ...]:
+    """Check every authored skill resource, including stale files after refresh."""
+
+    def resources(root: Path) -> dict[Path, bytes]:
+        return {
+            path.relative_to(root): path.read_bytes()
+            for path in root.rglob("*")
+            if path.is_file() and "__pycache__" not in path.parts and path.suffix != ".pyc"
+        }
+
+    catalogs = (
+        installed_package / ".apm/skills",
+        consumer / ".agents/skills",
+        consumer / ".claude/skills",
+    )
+    for skill in _KNOWLEDGE_SKILLS:
+        authored = resources(package_root / ".apm/skills" / skill)
+        _assert(Path("SKILL.md") in authored, f"Authored skill is missing: {skill}")
+        for catalog in catalogs:
+            deployed = resources(catalog / skill)
+            _assert(
+                authored.keys() == deployed.keys(),
+                f"Installed skill resources are missing or stale: {catalog / skill}",
+            )
+            # APM rewrites cross-skill Markdown links to apm_modules. The
+            # installed-runtime probe below validates those exact destinations
+            # and preserves all remaining Markdown bytes. Scripts and the
+            # installed source package still require literal byte parity.
+            for relative, content in authored.items():
+                if catalog != catalogs[0] and relative.suffix == ".md":
+                    continue
+                _assert(
+                    content == deployed[relative],
+                    "Installed skill resource differs from its source: "
+                    f"{catalog / skill / relative}",
+                )
+    return catalogs
 
 
 def _commands(value: object) -> list[str]:
@@ -965,24 +1007,22 @@ def run_smoke(*, keep: bool, live_cli: bool, python_request: str) -> dict[str, A
             "Unexpected APM package was installed.",
         )
         installed_package = modules / "_local" / package_root.name
-        for skill in ("knowledge-setup", "knowledge-compound"):
-            _assert(
-                (installed_package / ".apm" / "skills" / skill / "SKILL.md").is_file(),
-                f"Installed skill is missing: {skill}",
-            )
-            source_skill = package_root / ".apm" / "skills" / skill
-            for authored in source_skill.rglob("*.md"):
-                relative = authored.relative_to(source_skill)
-                for deployed_root in (
-                    installed_package / ".apm" / "skills",
-                    consumer / ".agents" / "skills",
-                    consumer / ".claude" / "skills",
-                ):
-                    deployed = deployed_root / skill / relative
-                    _assert(
-                        deployed.is_file() and deployed.read_bytes() == authored.read_bytes(),
-                        f"Installed skill resource differs from its source: {deployed}",
-                    )
+        skill_catalogs = _skill_resource_proof(package_root, installed_package, consumer)
+        skill_links = _run_json(
+            [
+                str(python_in_venv),
+                str(root / "tests/e2e/skill_catalog_probe.py"),
+                "--source",
+                str(package_root / ".apm/skills"),
+                "--installed-catalog",
+                str(installed_package / ".apm/skills"),
+                *map(str, skill_catalogs),
+            ],
+            cwd=temp_root,
+            env=clean_env,
+            logs=logs,
+            label="installed-skill-links",
+        )
         _assert(
             (
                 installed_package
@@ -1690,7 +1730,6 @@ def run_smoke(*, keep: bool, live_cli: bool, python_request: str) -> dict[str, A
                             "rationale": "The smoke observation is already represented.",
                         }
                     ],
-                    "publication_verified": False,
                 }
             ),
             encoding="utf-8",
@@ -1989,6 +2028,22 @@ def run_smoke(*, keep: bool, live_cli: bool, python_request: str) -> dict[str, A
             runtime=Path(recovery_setup["venv"]),
             logs=logs,
         )
+        _skill_resource_proof(package_root, installed_package, consumer)
+        refreshed_skill_links = _run_json(
+            [
+                str(python_in_venv),
+                str(root / "tests/e2e/skill_catalog_probe.py"),
+                "--source",
+                str(package_root / ".apm/skills"),
+                "--installed-catalog",
+                str(installed_package / ".apm/skills"),
+                *map(str, skill_catalogs),
+            ],
+            cwd=temp_root,
+            env=clean_env,
+            logs=logs,
+            label="refreshed-skill-links",
+        )
         leak_files = [
             *logs.rglob("*.log"),
             environment_launcher,
@@ -2024,6 +2079,7 @@ def run_smoke(*, keep: bool, live_cli: bool, python_request: str) -> dict[str, A
         "targets": ["codex", "claude", "copilot"],
         "projections": projection_paths,
         "resources": resources,
+        "skill_catalogs": {"installed": skill_links, "refreshed": refreshed_skill_links},
         "setup": {
             "launcher": str(setup_launcher),
             "hook_launcher": str(setup_hook_launcher.resolve()),
@@ -2065,7 +2121,8 @@ def run_smoke(*, keep: bool, live_cli: bool, python_request: str) -> dict[str, A
             "APM install and multi-target compile",
             "fresh-consumer APM audit",
             "installed guide/template parity",
-            "installed skill and reference parity across native catalogs",
+            "installed skill, reference and script parity across native catalogs",
+            "installed and refreshed links resolve to native or exact owning-package resources",
             "explicit doctor/context/search",
             "setup helper creates and reuses a venv",
             "setup helper installs runtime and compiles APM targets",
