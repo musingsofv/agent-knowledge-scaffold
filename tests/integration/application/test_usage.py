@@ -91,7 +91,7 @@ def _descriptor(workspace: Workspace) -> None:
     )
 
 
-def test_export_trace_includes_prior_start_exact_input_patch_and_checksums(tmp_path: Path) -> None:
+def test_export_trace_preserves_historical_singular_publication_and_patch(tmp_path: Path) -> None:
     workspace = _workspace(tmp_path)
     root = workspace.receipts.directory
     run = root / "compound" / "run-1"
@@ -103,7 +103,15 @@ def test_export_trace_includes_prior_start_exact_input_patch_and_checksums(tmp_p
     drain = _event("drain", "2026-09-12T00:00:00Z", run_id="run-1", operation="compound.drain")
     drain.update(
         artifacts={"changes": "changes.patch", "signal_snapshots": [{"path": "inputs/hash.md"}]},
-        agent_report={"dispositions": [{"decision": "update", "signal_id": "x"}]},
+        agent_report={
+            "dispositions": [{"decision": "update", "signal_id": "x"}],
+            "publication": {
+                "repository": "example/knowledge",
+                "commit": "a" * 40,
+                "publication_verified": True,
+                "verification": "agent-reported",
+            },
+        },
         tool_result={"drained": ["x"], "retained": []},
     )
     append_event(run / "events.jsonl", start)
@@ -121,6 +129,9 @@ def test_export_trace_includes_prior_start_exact_input_patch_and_checksums(tmp_p
         json.loads(line) for line in (destination / "events.jsonl").read_text().splitlines()
     ]
     assert {event["event_id"] for event in exported} == {"start", "drain", "included"}
+    exported_drain = next(event for event in exported if event["event_id"] == "drain")
+    assert exported_drain["agent_report"] == drain["agent_report"]
+    assert exported_drain["artifacts"] == drain["artifacts"]
     assert (
         next(event for event in exported if event["event_id"] == "start")[
             "export_supporting_context"

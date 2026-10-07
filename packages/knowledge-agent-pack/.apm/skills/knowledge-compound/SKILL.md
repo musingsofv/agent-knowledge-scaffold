@@ -349,6 +349,15 @@ delete-retire an obsolete owner, keep an already-covered observation, skip an
 out-of-scope observation, or defer an unresolved one. A no-update disposition
 still states which owner/evidence covered it.
 
+Compounding completes the useful knowledge, skill or instruction outcome; it
+does not require implementing the product work described by that outcome. An
+accepted decision may be recorded with implementation explicitly deferred and
+a link to the owning product plan. Once that authoring outcome is validated and
+published, or confirmed already covered, the signal is eligible for guarded
+drainage. Do not retain it solely as a product task reminder or relabel an
+unpublished correction as already covered. Retain genuinely unresolved authoring
+work with its exact missing evidence, source, validation or publication step.
+
 ## Publish and drain safely
 
 For a configured publication source, verify the authenticated Git identity,
@@ -392,29 +401,57 @@ dispositions:
     owners:
       - source: example-knowledge
         path: guidance/indexing.md
-publication_verified: false
+publications: []
 YAML
 ~~~
 
-Dispositions identify actual knowledge owners with `{source, path}`. Skill or
+Dispositions identify knowledge owners with `{source, path}`. Skill or
 instruction owners use `{repository, path, package?}` for the resolved authoring
-source, never an installed projection. If ownership cannot be resolved, supply
-`owner_unavailable_reason` and retain the actionable update. An owner reference
-is a candidate until resolved; it does not establish publication.
+source, never an installed projection. For `update`, `create` or `delete-retire`,
+`owners` means every actual required authoring destination. Discovery candidates,
+supporting citations, already-covered references and repositories with only
+future product implementation are not additional write destinations; explain
+those boundaries in the rationale. Do not omit a required change to evade its
+publication check. If required ownership cannot be resolved, supply
+`owner_unavailable_reason` and retain the actionable update.
 
-For write decisions, include `publication` with the reported status and available
-repository, pull_request and commit evidence. If capturing a patch, give the
-actual checkout plus before_revision and after_revision delimiting this run's
-changes, or an unavailable_reason. Do not attribute a whole pre-existing PR to
-this run. The tool records assertions as agent-reported and captures a patch
-only when the declared revisions can be safely read.
+Write decisions use a `publications` list with one entry per exact repository.
+Each entry requires `repository`, `status` and the boolean
+`publication_verified`. After verifying the remote commit and any PR head,
+use `status: published`, `publication_verified: true` and the full remote
+`commit`; include the positive integer `pull_request` number for a reviewed PR
+route. A PR number alone is not commit evidence. Other reportable statuses are
+`pending`, `unavailable` and `not-required`; none proves a required write was published. See the installed
+guide's "Publication coverage and completed knowledge work" for the request
+shape and coverage rules.
 
-For update, create or delete-retire decisions set publication_verified true
-only after remote verification, with publication status `published`, the
-repository, and a commit or pull_request reference. Keep, skip and explicit no-write outcomes may
-drain with a stated rationale. The tool binds drain to the recorded snapshots,
-persists dispositions and intent, verifies archived bytes, then rechecks inbox
-containment, file identity and complete bytes immediately before unlinking.
+Every required authoring repository needs its own matching verified entry.
+Knowledge owners resolve through the selected source's configured publication
+route; skill/instruction owners name their authoring repository directly. One
+repository's publication cannot stand in for another, even when one signal
+requires both. A missing source route or pending owner retains that signal;
+independently completed signals can still drain. Awaiting human review or merge
+is not an unresolved authoring step after verified PR publication.
+
+Optional patch evidence belongs to each repository entry: provide `checkout`
+and the `before_revision` / `after_revision` pair delimiting this run's changes.
+Do not attribute a whole pre-existing PR to this run. The tool captures a patch
+only when those revisions can be safely read, otherwise reports why capture is
+unavailable. Reserve the entry's `unavailable_reason` for unavailable publication;
+that reason prevents it from certifying a write. Publication assertions and
+optional patch capture are separate: a local patch does not verify a remote
+publication, and unavailable patch capture does not
+negate a separately verified publication. The agent performs that verification;
+the CLI validates explicit assertions and coverage without contacting GitHub or
+granting permission. A CLI-written receipt is durable evidence of the assertion,
+not independent confirmation that it is true.
+
+`keep` and `skip` are no-write decisions. They may drain with a supported
+rationale and applicable owner/evidence without a new PR or a publication
+entry for an unchanged owner. `defer` retains genuinely unfinished work. The
+tool binds drain to the recorded snapshots, persists dispositions and intent,
+verifies archived bytes, then rechecks inbox containment, file identity and
+complete bytes immediately before unlinking.
 Missing archives or failed durable writes retain inputs. Changed, new, missing,
 malformed, symlinked or uncertain inputs remain in the inbox. Partial cleanup
 is reported; never recreate a removed signal merely to make a count match.

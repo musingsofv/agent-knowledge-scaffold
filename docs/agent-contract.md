@@ -690,6 +690,96 @@ are evidence, not pending signals or searchable canonical knowledge. Finish
 records an agent-reported outcome; actual drain counts come from prior tool events.
 Publication claims remain agent-reported unless independently checked.
 
+### Publication coverage and completed knowledge work
+
+The compounding agent determines the useful knowledge, skill or instruction
+outcome. Recording an accepted decision with implementation explicitly deferred
+can complete that outcome; preserve its status and link the owning product
+plan. Do not claim implementation proof or retain a fully handled signal solely
+as a reminder of future product work. If a necessary authoring correction is
+still unresolved, retain the signal and state the missing prerequisite.
+
+For write decisions (`update`, `create`, `delete-retire`), disposition `owners`
+lists every actual required authoring destination. Use `{source, path}` for
+knowledge and `{repository, path, package?}` for the resolved authored skill or
+instruction source. Discovery candidates, citations, unchanged references and
+future implementation repositories are not additional write destinations;
+preserve their relevance in the rationale. Never remove a required authoring
+owner to make coverage pass. An unresolved owner requires an
+`owner_unavailable_reason` and retains the actionable update.
+
+A drain request supplies `publications`, with one entry per exact repository.
+Each entry requires `repository`, `status` and boolean `publication_verified`.
+The statuses are `published`, `pending`, `unavailable` and `not-required`.
+Drainable writes require matching `published` entries with
+`publication_verified: true` and a full exact remote `commit`; a reviewed PR
+route also records its positive integer `pull_request` number. A PR number
+alone does not identify the verified commit. These illustrative entries cover
+a central runbook and a consumer skill in one request:
+
+```yaml
+action: drain
+run_id: compound-returned-run-id
+selected:
+  - id: release-migration
+    path: /work/knowledge/ai/signals/shared/release-migration.md
+    fingerprint: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+dispositions:
+  - signal_id: release-migration
+    decision: update
+    rationale: The runbook and release skill now require the verified migration step.
+    owners:
+      - source: example-knowledge
+        path: runbooks/release.md
+      - repository: example/orders-api
+        path: .apm/skills/release/SKILL.md
+publications:
+  - repository: example/knowledge
+    status: published
+    publication_verified: true
+    commit: "0123456789abcdef0123456789abcdef01234567"
+    pull_request: 12
+  - repository: example/orders-api
+    status: published
+    publication_verified: true
+    commit: "89abcdef89abcdef89abcdef89abcdef89abcdef"
+    pull_request: 34
+```
+
+Replace the illustrative IDs, paths and publication evidence with inspected
+values. The selected knowledge source must configure `example/knowledge` as
+its publication repository for this example to cover that owner. Profile
+selection and its effective source overrides remain authoritative. A source
+without a publication route cannot have a required write certified by an
+arbitrary repository entry. Skill/instruction owners match their explicit
+repository. Duplicate repository entries are rejected. Every required owner
+must have matching verified evidence; one missing, pending or mismatched entry
+retains the affected signal without blocking independently completed signals.
+Verified PR publication is sufficient; human review or merge need not finish
+before eligible unchanged inputs drain.
+
+For bounded per-repository change evidence, each entry may also provide
+`checkout` and the `before_revision` / `after_revision` pair. Capture only
+this run's change, not a whole pre-existing PR. `unavailable_reason` describes
+unavailable publication, not a missing optional patch, and prevents that entry
+from certifying a write. Patch capture reports its own unavailable reason.
+Optional patch capture and publication assertions are separate: a local
+patch cannot verify a remote commit, and a missing patch does not invalidate
+separately verified publication. The CLI records the declarations as
+agent-reported and captures patches only when the supplied revisions can be
+safely read. It does not contact GitHub, establish authorization, infer semantic
+owner coverage or independently verify a PR. The agent performs those checks;
+a tool-written receipt preserves their asserted result.
+
+`keep` (already covered) and `skip` (out of scope) require a supported rationale
+and relevant owner/evidence, but no new publication for unchanged owners. Omit
+`publications` or supply `[]` for a no-write round. Do not relabel an unfinished
+write as no-write to bypass publication. `defer` retains unresolved work.
+All dispositions still use the recorded snapshots, mandatory archives and
+pre-removal intent; current signal bytes and file-safety checks remain decisive.
+Historical run records remain evidence of their original assertions, not new
+publication requests or a reason to rewrite past receipts.
+
 ### Local trigger agreement and delegated workers
 
 The setup skill selects one local trigger for a shared signal store. Configure

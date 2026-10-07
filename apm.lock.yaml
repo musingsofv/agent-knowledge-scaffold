@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-10-07T12:29:01.657096+00:00'
+generated_at: '2026-10-07T14:31:52.207393+00:00'
 apm_version: 0.29.0
 dependencies:
 - repo_url: _local/knowledge-agent-pack
@@ -63,10 +63,10 @@ dependencies:
   - .github/hooks/knowledge-agent-pack-knowledge-discovery.json
   - .github/instructions/agent-knowledge-discovery.instructions.md
   deployed_file_hashes:
-    .agents/skills/knowledge-compound/SKILL.md: sha256:66cf86e59e8e6b1fc83ba262b006b3134e530ce573ce2d9c16af05a9e2b5d02a
+    .agents/skills/knowledge-compound/SKILL.md: sha256:cd2b21a82e217a3bc5546b9222242c4d6ad9ff6cd42f4a2774b60116b08ff3e0
     .agents/skills/knowledge-compound/references/business-decisions.md: sha256:2a0472a3b9689ce51c644ba0f5bcc73e8620e99afc0a6d654642cab030745d56
     .agents/skills/knowledge-compound/references/guidance-authoring.md: sha256:795100d731426dc7adb5b6715c7ceb4b12590e9aced1867b00d8ec51ae27e97f
-    .agents/skills/knowledge-compound/references/owner-discovery.md: sha256:2f352f6366fb44dd80f35b8918a836557ea547d8594c9b24ae073047feaf413e
+    .agents/skills/knowledge-compound/references/owner-discovery.md: sha256:074788bb0f9bf6da13a52f1f930cd949462fe356ecd6b3ca21a5aa22ac12f3d4
     .agents/skills/knowledge-setup/SKILL.md: sha256:d1cdc3e1205f911f4c23f0798abe2b7aa068c56f8729fb8b48ff434716c2029a
     .agents/skills/knowledge-setup/references/business-onboarding.md: sha256:7704ef34b6e929ea83c3201cfb883e54995a8a1a4293632042cf816742639667
     .agents/skills/knowledge-setup/references/claude-scheduled.md: sha256:0f1dab248bf2f6c3b62a933ab85ae8a5ae967673ed517b38377f168d8ad50135
@@ -87,10 +87,10 @@ dependencies:
     .agents/skills/knowledge-upgrade/SKILL.md: sha256:c4fb61fab23ec6c4b01ae25e1ae46275bb5d9b0c82a3f4042b1a68c0476143d2
     .agents/skills/knowledge-upgrade/references/scaffold-upgrades.md: sha256:ccd47735f377199761a1ef5c60fe96aa54b9740162d116a4da175eb4fa4def4f
     .claude/rules/agent-knowledge-discovery.md: sha256:6011494dcda0af9b3a8eef1684232a195ff5dbb54ff01f73d38e88843a292b4b
-    .claude/skills/knowledge-compound/SKILL.md: sha256:66cf86e59e8e6b1fc83ba262b006b3134e530ce573ce2d9c16af05a9e2b5d02a
+    .claude/skills/knowledge-compound/SKILL.md: sha256:cd2b21a82e217a3bc5546b9222242c4d6ad9ff6cd42f4a2774b60116b08ff3e0
     .claude/skills/knowledge-compound/references/business-decisions.md: sha256:2a0472a3b9689ce51c644ba0f5bcc73e8620e99afc0a6d654642cab030745d56
     .claude/skills/knowledge-compound/references/guidance-authoring.md: sha256:795100d731426dc7adb5b6715c7ceb4b12590e9aced1867b00d8ec51ae27e97f
-    .claude/skills/knowledge-compound/references/owner-discovery.md: sha256:2f352f6366fb44dd80f35b8918a836557ea547d8594c9b24ae073047feaf413e
+    .claude/skills/knowledge-compound/references/owner-discovery.md: sha256:074788bb0f9bf6da13a52f1f930cd949462fe356ecd6b3ca21a5aa22ac12f3d4
     .claude/skills/knowledge-setup/SKILL.md: sha256:d1cdc3e1205f911f4c23f0798abe2b7aa068c56f8729fb8b48ff434716c2029a
     .claude/skills/knowledge-setup/references/business-onboarding.md: sha256:7704ef34b6e929ea83c3201cfb883e54995a8a1a4293632042cf816742639667
     .claude/skills/knowledge-setup/references/claude-scheduled.md: sha256:0f1dab248bf2f6c3b62a933ab85ae8a5ae967673ed517b38377f168d8ad50135
@@ -151,7 +151,7 @@ deployments:
   owners:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:66cf86e59e8e6b1fc83ba262b006b3134e530ce573ce2d9c16af05a9e2b5d02a
+  content_hash: sha256:cd2b21a82e217a3bc5546b9222242c4d6ad9ff6cd42f4a2774b60116b08ff3e0
 - kind: project-relative
   target: claude
   value: .claude/skills/knowledge-compound/references/business-decisions.md
@@ -178,7 +178,7 @@ deployments:
   owners:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:2f352f6366fb44dd80f35b8918a836557ea547d8594c9b24ae073047feaf413e
+  content_hash: sha256:074788bb0f9bf6da13a52f1f930cd949462fe356ecd6b3ca21a5aa22ac12f3d4
 - kind: project-relative
   target: claude
   value: .claude/skills/knowledge-setup
@@ -385,7 +385,7 @@ deployments:
   owners:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:66cf86e59e8e6b1fc83ba262b006b3134e530ce573ce2d9c16af05a9e2b5d02a
+  content_hash: sha256:cd2b21a82e217a3bc5546b9222242c4d6ad9ff6cd42f4a2774b60116b08ff3e0
 - kind: project-relative
   target: codex
   value: .agents/skills/knowledge-compound/references/business-decisions.md
@@ -412,7 +412,7 @@ deployments:
   owners:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:2f352f6366fb44dd80f35b8918a836557ea547d8594c9b24ae073047feaf413e
+  content_hash: sha256:074788bb0f9bf6da13a52f1f930cd949462fe356ecd6b3ca21a5aa22ac12f3d4
 - kind: project-relative
   target: codex
   value: .agents/skills/knowledge-setup

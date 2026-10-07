@@ -1730,7 +1730,6 @@ def run_smoke(*, keep: bool, live_cli: bool, python_request: str) -> dict[str, A
                             "rationale": "The smoke observation is already represented.",
                         }
                     ],
-                    "publication_verified": False,
                 }
             ),
             encoding="utf-8",

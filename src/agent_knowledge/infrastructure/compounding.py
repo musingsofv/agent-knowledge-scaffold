@@ -824,8 +824,7 @@ def drain_signals(
     dispositions: tuple[SignalDisposition, ...],
     *,
     run_id: str,
-    publication_verified: bool,
-    publication: PublicationEvidence | None = None,
+    publications: tuple[PublicationEvidence, ...] = (),
 ) -> DrainReport:
     """Persist intent, verify immutable archives, and remove only eligible unchanged inputs."""
     began = monotonic()
@@ -860,12 +859,15 @@ def drain_signals(
         attempt_id = secrets.token_hex(16)
         context = _context(active)
         owner_results = resolved_owners(workspace, dispositions)
-        changes = capture_changes(workspace, run_id, attempt_id, publication)
+        changes = [
+            capture_changes(workspace, run_id, attempt_id, publication)
+            for publication in publications
+        ]
         report_payload: dict[str, object] = {
             "attempt_id": attempt_id,
             "agent_report": {
                 "dispositions": [disposition_view(item) for item in dispositions],
-                "publication": publication_view(publication, verified=publication_verified),
+                "publications": [publication_view(item) for item in publications],
             },
             "owner_resolution": owner_results,
             "artifacts": {"changes": changes},
@@ -889,16 +891,24 @@ def drain_signals(
                 for d in dispositions
             )
         }
+        source_repositories = {
+            source.id: source.publication.repository
+            for source in workspace.sources
+            if source.publication is not None
+        }
+        publication_repositories = {item.repository for item in publications}
+        missing_routes: set[str] = set()
         for disposition in dispositions:
+            if disposition.decision.value not in {"create", "update", "delete-retire"}:
+                continue
             for owner in disposition.owners:
                 source = next((item for item in workspace.sources if item.id == owner.source), None)
-                if (
+                if source is not None and source.publication is None:
+                    missing_routes.add(disposition.signal_id)
+                elif (
                     source is not None
                     and source.publication is not None
-                    and (
-                        publication is None
-                        or publication.repository != source.publication.repository
-                    )
+                    and source.publication.repository not in publication_repositories
                 ):
                     unresolved_owners.add(disposition.signal_id)
         current: dict[str, str] = {}
@@ -906,10 +916,18 @@ def drain_signals(
             {
                 "signal_id": identifier,
                 "code": "owner-unavailable",
-                "message": "Owner source or its configured publication route is unresolved.",
+                "message": "An authored owner source or its configured publication is unresolved.",
             }
             for identifier in sorted(unresolved_owners)
         ]
+        errors.extend(
+            {
+                "signal_id": identifier,
+                "code": "missing-publication-route",
+                "message": "An authored knowledge owner has no configured publication repository.",
+            }
+            for identifier in sorted(missing_routes)
+        )
         for snapshot in snapshots:
             if snapshot.id in already_drained:
                 errors.append(
@@ -952,10 +970,12 @@ def drain_signals(
                 snapshots,
                 dispositions,
                 current_fingerprints={
-                    key: value for key, value in current.items() if key not in unresolved_owners
+                    key: value
+                    for key, value in current.items()
+                    if key not in unresolved_owners | missing_routes
                 },
-                publication_verified=publication_verified,
-                publication=publication,
+                publications=publications,
+                source_repositories=source_repositories,
             )
         except ValueError as error:
             raise ValidationError("invalid-drain-request", "signals", str(error)) from error

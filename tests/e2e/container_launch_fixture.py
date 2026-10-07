@@ -165,7 +165,6 @@ def tool_probe(provider: str, session: str, phase: str) -> dict:
             "run_id": started["run_id"],
             "selected": selected,
             "dispositions": [disposition],
-            "publication_verified": False,
         },
         provider=provider,
         session=session,

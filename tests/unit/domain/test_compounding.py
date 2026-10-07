@@ -1,5 +1,7 @@
 """Exercise pure PR-selection and signal-disposition algebra."""
 
+from dataclasses import replace
+
 import pytest
 
 from agent_knowledge.domain.compounding import (
@@ -76,6 +78,12 @@ def test_pr_selection_honors_explicit_eligible_then_latest_with_stable_tie() -> 
     assert "not eligible" in rejected.reason
 
 
+def _publication(
+    repository: str = "example/knowledge", *, verified: bool = True, status: str = "published"
+) -> PublicationEvidence:
+    return PublicationEvidence(status, repository, verified, commit="a" * 40)
+
+
 @pytest.mark.parametrize(
     ("decision", "verified", "expected"),
     [
@@ -94,10 +102,8 @@ def test_drain_gate_requires_publication_for_writes(
     assert (
         can_drain(
             _disposition("one", decision),
-            publication_verified=verified,
-            publication=PublicationEvidence(
-                "published", repository="example/knowledge", commit="a" * 40
-            ),
+            publications=(_publication(verified=verified),),
+            source_repositories={"knowledge": "example/knowledge"},
         )
         is expected
     )
@@ -113,20 +119,16 @@ def test_drainable_snapshots_retain_changed_missing_and_deferred_inputs() -> Non
         snapshots,
         dispositions,
         current_fingerprints={"one": snapshots[0].fingerprint, "two": "sha256:" + "c" * 64},
-        publication_verified=True,
-        publication=PublicationEvidence(
-            "published", repository="example/knowledge", commit="a" * 40
-        ),
+        publications=(_publication(),),
+        source_repositories={"knowledge": "example/knowledge"},
     ) == (snapshots[0],)
     assert (
         drainable_snapshots(
             snapshots,
             dispositions,
             current_fingerprints={"one": "sha256:" + "c" * 64},
-            publication_verified=True,
-            publication=PublicationEvidence(
-                "published", repository="example/knowledge", commit="a" * 40
-            ),
+            publications=(_publication(),),
+            source_repositories={"knowledge": "example/knowledge"},
         )
         == ()
     )
@@ -206,20 +208,22 @@ def test_duplicate_snapshot_and_disposition_ids_are_rejected() -> None:
 
 
 @pytest.mark.parametrize(
-    "publication",
+    "publications",
     [
-        None,
-        PublicationEvidence("published"),
-        PublicationEvidence("published", repository="example/knowledge"),
-        PublicationEvidence("pending", repository="example/knowledge", commit="abc"),
-        PublicationEvidence("unavailable", unavailable_reason="No publication route."),
+        (),
+        (replace(_publication(), commit=None),),
+        (replace(_publication(), commit="abc"),),
+        (_publication(status="pending"),),
+        (_publication(verified=False),),
+        (replace(_publication(status="unavailable"), unavailable_reason="No access."),),
+        (replace(_publication(), unavailable_reason="Owner is unavailable."),),
     ],
 )
-def test_write_drain_requires_concrete_publication_evidence(publication) -> None:
+def test_write_drain_requires_concrete_publication_evidence(publications) -> None:
     assert not can_drain(
         _disposition("one", CompoundDecision.UPDATE),
-        publication_verified=True,
-        publication=publication,
+        publications=publications,
+        source_repositories={"knowledge": "example/knowledge"},
     )
 
 
@@ -228,8 +232,8 @@ def test_external_owner_must_match_the_declared_publication_repository() -> None
         "skills/example/SKILL.md", repository="example/package", package="skills"
     )
     decision = SignalDisposition("one", CompoundDecision.UPDATE, "Fixed source skill.", (owner,))
-    publication = PublicationEvidence("published", repository="example/other", commit="abc")
-    assert not can_drain(decision, publication_verified=True, publication=publication)
+    assert not can_drain(decision, publications=(_publication("example/other"),))
+    assert can_drain(decision, publications=(_publication("example/package"),))
 
 
 def test_write_request_requires_owner_or_explicit_unavailable_reason() -> None:
@@ -249,8 +253,7 @@ def test_write_request_requires_owner_or_explicit_unavailable_reason() -> None:
     )
     assert not can_drain(
         request.dispositions[0],
-        publication_verified=True,
-        publication=PublicationEvidence("published", repository="example/pkg", commit="abc"),
+        publications=(_publication("example/pkg"),),
     )
 
 
@@ -338,3 +341,200 @@ def test_worker_attachment_accepts_only_complete_identity_metadata(
 ) -> None:
     with pytest.raises(ValidationError):
         parse_compound_request(value)
+
+
+def _multi_owner_disposition(identifier: str = "one") -> SignalDisposition:
+    return SignalDisposition(
+        identifier,
+        CompoundDecision.UPDATE,
+        "Published the durable decision and owning consumer procedure.",
+        (
+            OwnerReference("guidance/example.md", source="knowledge"),
+            OwnerReference(".apm/skills/example/SKILL.md", repository="example/consumer"),
+        ),
+    )
+
+
+@pytest.mark.parametrize("fault", [None, "missing", "pending", "unverified", "mismatch"])
+def test_multi_repository_writes_require_every_authoring_owner(fault: str | None) -> None:
+    consumer = _publication("example/consumer")
+    publications = (_publication(), consumer)
+    if fault == "missing":
+        publications = (_publication(),)
+    elif fault == "pending":
+        publications = (_publication(), replace(consumer, status="pending"))
+    elif fault == "unverified":
+        publications = (_publication(), replace(consumer, publication_verified=False))
+    elif fault == "mismatch":
+        publications = (_publication(), replace(consumer, repository="example/other"))
+    assert can_drain(
+        _multi_owner_disposition(),
+        publications=publications,
+        source_repositories={"knowledge": "example/knowledge"},
+    ) is (fault is None)
+
+
+def test_each_signal_uses_its_own_owner_coverage_and_unrelated_evidence_is_irrelevant() -> None:
+    selected = tuple(_snapshot(name) for name in ("covered", "partial", "deferred", "kept"))
+    dispositions = (
+        _disposition("covered", CompoundDecision.UPDATE),
+        _multi_owner_disposition("partial"),
+        _disposition("deferred", CompoundDecision.DEFER),
+        _disposition("kept", CompoundDecision.KEEP),
+    )
+    result = drainable_snapshots(
+        selected,
+        dispositions,
+        current_fingerprints={item.id: item.fingerprint for item in selected},
+        publications=(_publication(), _publication("example/unrelated", verified=False)),
+        source_repositories={"knowledge": "example/knowledge"},
+    )
+    assert tuple(item.id for item in result) == ("covered", "kept")
+
+
+@pytest.mark.parametrize("source_repositories", [None, {}, {"other": "example/knowledge"}])
+def test_source_owner_requires_its_configured_publication_route(source_repositories) -> None:
+    assert not can_drain(
+        _disposition("one", CompoundDecision.UPDATE),
+        publications=(_publication(),),
+        source_repositories=source_repositories,
+    )
+
+
+def test_source_id_and_repository_name_are_not_interchangeable() -> None:
+    assert not can_drain(
+        _disposition("one", CompoundDecision.UPDATE),
+        publications=(_publication("knowledge"),),
+        source_repositories={"knowledge": "example/knowledge"},
+    )
+
+
+@pytest.mark.parametrize("decision", [CompoundDecision.KEEP, CompoundDecision.SKIP])
+def test_non_write_decisions_need_only_a_rationale(decision: CompoundDecision) -> None:
+    disposition = SignalDisposition(
+        "one",
+        decision,
+        "The accepted deferral is already recorded in the durable owner.",
+        owners=(OwnerReference("missing.md", source="unavailable"),),
+        owner_unavailable_reason="No new authoring required.",
+    )
+    assert can_drain(disposition)
+    assert not can_drain(replace(disposition, rationale="  "))
+
+
+def test_same_repository_can_cover_multiple_distinct_owners() -> None:
+    disposition = replace(
+        _multi_owner_disposition(),
+        owners=(
+            OwnerReference("guidance/one.md", source="knowledge"),
+            OwnerReference(".apm/skills/example/SKILL.md", repository="example/knowledge"),
+        ),
+    )
+    assert can_drain(
+        disposition,
+        publications=(_publication(),),
+        source_repositories={"knowledge": "example/knowledge"},
+    )
+
+
+def _publication_input(repository: str = "example/knowledge") -> dict[str, object]:
+    return {
+        "status": "published",
+        "repository": repository,
+        "publication_verified": True,
+        "commit": "a" * 40,
+    }
+
+
+def test_publications_parse_independent_verification_and_exact_commits() -> None:
+    publications = [
+        {**_publication_input(), "pull_request": 17},
+        {**_publication_input("example/consumer"), "commit": "b" * 64},
+    ]
+    request = parse_compound_request({"action": "status", "publications": publications})
+    assert len(request.publications) == 2
+    assert request.publications[0].pull_request == 17
+    assert request.publications[1].commit == "b" * 64
+    assert all(item.publication_verified for item in request.publications)
+
+
+@pytest.mark.parametrize("field", ["publication", "publication_verified"])
+def test_legacy_publication_fields_are_rejected(field: str) -> None:
+    with pytest.raises(ValidationError) as caught:
+        parse_compound_request({"action": "status", field: True})
+    assert (caught.value.code, caught.value.path) == ("unknown-field", field)
+
+
+@pytest.mark.parametrize("field", ["status", "repository", "publication_verified"])
+def test_each_publication_requires_its_own_identity_status_and_verification(field: str) -> None:
+    value = _publication_input()
+    value.pop(field)
+    with pytest.raises(ValidationError) as caught:
+        parse_compound_request({"action": "status", "publications": [value]})
+    assert caught.value.code == "missing-field"
+    assert caught.value.path == f"publications[0].{field}"
+
+
+@pytest.mark.parametrize("value", [None, {}, "example/knowledge", True])
+def test_publications_must_be_a_list(value: object) -> None:
+    with pytest.raises(ValidationError) as caught:
+        parse_compound_request({"action": "status", "publications": value})
+    assert (caught.value.code, caught.value.path) == ("invalid-type", "publications")
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"status": "merged"},
+        {"repository": ""},
+        {"publication_verified": "true"},
+        {"publication_verified": 1},
+        {"commit": "abc"},
+        {"commit": "A" * 40},
+        {"commit": "a" * 41},
+        {"commit": "--HEAD"},
+        {"pull_request": True},
+        {"pull_request": 0},
+        {"before_revision": "a" * 40},
+        {"after_revision": "b" * 40},
+        {"status": "unavailable"},
+        {"unknown": "field"},
+    ],
+)
+def test_publication_rejects_malformed_or_ambiguous_evidence(changes: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        parse_compound_request(
+            {"action": "status", "publications": [{**_publication_input(), **changes}]}
+        )
+
+
+@pytest.mark.parametrize("changes", [{}, {"commit": "b" * 40}, {"publication_verified": False}])
+def test_duplicate_repository_evidence_is_rejected_even_if_identical(changes) -> None:
+    with pytest.raises(ValidationError) as caught:
+        parse_compound_request(
+            {
+                "action": "status",
+                "publications": [_publication_input(), {**_publication_input(), **changes}],
+            }
+        )
+    assert (caught.value.code, caught.value.path) == ("duplicate-value", "publications")
+    assert not can_drain(
+        _disposition("one", CompoundDecision.UPDATE),
+        publications=(_publication(), _publication()),
+        source_repositories={"knowledge": "example/knowledge"},
+    )
+
+
+@pytest.mark.parametrize("commit", [None, "missing"])
+def test_pr_number_without_exact_commit_parses_but_cannot_drain(commit: str | None) -> None:
+    value = {**_publication_input(), "pull_request": 17}
+    if commit == "missing":
+        value.pop("commit")
+    else:
+        value["commit"] = commit
+    request = parse_compound_request({"action": "status", "publications": [value]})
+    assert not can_drain(
+        _disposition("one", CompoundDecision.UPDATE),
+        publications=request.publications,
+        source_repositories={"knowledge": "example/knowledge"},
+    )

@@ -279,19 +279,25 @@ def _schemas() -> dict[str, dict[str, FieldSpec]]:
                 "object[]",
                 "signal_id/decision/rationale plus owners [{source,path} or "
                 "{repository,path,package?}] or owner_unavailable_reason. "
-                "Required for drain. Write decisions with unresolved owners "
-                "remain pending.",
+                "Required for drain. Owners are the complete final required authored "
+                "knowledge/skill/instruction changes; references and deferred product "
+                "implementation alone are not authoring obligations. Write decisions "
+                "with unresolved owners remain pending. Keep/skip require rationale, "
+                "not publication.",
             ),
-            "publication": _field(
-                "object",
-                "Agent-reported status and repository/PR/commit evidence; "
-                "optional checkout/before_revision/after_revision for tool- "
-                "captured bounded Git patch, or unavailable_reason.",
-            ),
-            "publication_verified": _field(
-                "boolean",
-                "Explicit caller assertion for write decisions; never "
-                "inferred from a commit, receipt, or finish outcome.",
+            "publications": _field(
+                "object[]",
+                "One entry per exact repository: required repository, status "
+                "(published/pending/unavailable/not-required), publication_verified boolean; "
+                "optional commit (full 40/64 lowercase hex), pull_request (positive integer), "
+                "checkout/before_revision/after_revision for an independently captured "
+                "bounded local patch, or unavailable_reason (required for unavailable). "
+                "Before/after boundaries must be paired. A write requires published, "
+                "explicitly verified exact remote commit evidence with no unavailable_reason "
+                "for every final authored owner repository. Source owners resolve through "
+                "their configured publication repository. Missing routes retain writes. "
+                "Verification is agent-reported, never inferred from patches or outcomes. "
+                "Duplicate repository entries are rejected.",
             ),
         },
         "usage export": {

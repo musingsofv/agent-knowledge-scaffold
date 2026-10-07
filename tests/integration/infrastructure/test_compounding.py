@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -31,7 +32,9 @@ from agent_knowledge.infrastructure.errors import AdapterError
 from tests.factories import catalog_data, signal_data
 
 
-def workspace(tmp_path: Path) -> Workspace:
+def workspace(
+    tmp_path: Path, *, publication_repository: str | None = "example/knowledge"
+) -> Workspace:
     source = tmp_path / "knowledge"
     source.mkdir()
     (source / "guidance").mkdir()
@@ -39,6 +42,13 @@ def workspace(tmp_path: Path) -> Workspace:
     scaffold = tmp_path / "scaffold"
     (scaffold / "ai" / "signals").mkdir(parents=True)
     (tmp_path / "catalog.yaml").write_text(yaml.safe_dump(catalog_data()))
+    source_config = {"id": "knowledge", "root": "knowledge", "catalog": "catalog.yaml"}
+    if publication_repository is not None:
+        source_config["publication"] = {
+            "repository": publication_repository,
+            "base_branch": "main",
+            "branch_prefix": "knowledge/",
+        }
     config = tmp_path / "workspace.yaml"
     config.write_text(
         yaml.safe_dump(
@@ -46,7 +56,7 @@ def workspace(tmp_path: Path) -> Workspace:
                 "schema_version": "knowledge-workspace.v1",
                 "workspace_id": "repo:orders",
                 "applicable_scopes": ["org:example", "repo:orders"],
-                "sources": [{"id": "knowledge", "root": "knowledge", "catalog": "catalog.yaml"}],
+                "sources": [source_config],
                 "signal_storage": {"scaffold_root": "scaffold", "code_root": "."},
             }
         )
@@ -173,7 +183,6 @@ def test_activity_lifecycle_preserves_provenance_and_drained_ids(tmp_path: Path)
         (snapshot(signal),),
         (disposition("one", CompoundDecision.KEEP),),
         run_id=started.run_id,
-        publication_verified=False,
     )
     ended = finish_run(
         loaded,
@@ -267,9 +276,13 @@ def test_drain_removes_only_handled_unchanged_files(tmp_path: Path) -> None:
             disposition("changed", CompoundDecision.UPDATE),
         ),
         run_id=run_id,
-        publication_verified=True,
-        publication=PublicationEvidence(
-            "published", repository="example/knowledge", commit="a" * 40
+        publications=(
+            PublicationEvidence(
+                "published",
+                repository="example/knowledge",
+                publication_verified=True,
+                commit="a" * 40,
+            ),
         ),
     )
 
@@ -295,7 +308,6 @@ def test_drain_removes_current_project_signal(tmp_path: Path) -> None:
         selected,
         (disposition("local", CompoundDecision.KEEP),),
         run_id=run_id,
-        publication_verified=False,
     )
 
     assert report.drained == ("local",)
@@ -357,7 +369,6 @@ def test_drain_revalidates_signal_after_start(tmp_path: Path, fault: str) -> Non
         selected,
         (disposition("one", CompoundDecision.KEEP),),
         run_id=run_id,
-        publication_verified=False,
     )
     assert report.drained == ()
     assert report.retained == ("one",)
@@ -386,7 +397,6 @@ def test_partial_cleanup_reports_successes_and_retains_failed_input(
         selected,
         tuple(disposition(item.id, CompoundDecision.KEEP) for item in selected),
         run_id=run_id,
-        publication_verified=False,
     )
 
     assert report.drained == ("one",)
@@ -434,7 +444,6 @@ def test_final_identity_check_retains_file_replaced_before_unlink(
         selected,
         (disposition("one", CompoundDecision.KEEP),),
         run_id=run_id,
-        publication_verified=False,
     )
 
     assert report.drained == ()
@@ -485,7 +494,6 @@ def test_bad_archive_retains_signal(tmp_path: Path, fault: str) -> None:
         selected,
         (disposition("one", CompoundDecision.KEEP),),
         run_id=run_id,
-        publication_verified=False,
     )
     assert result.drained == ()
     assert result.retained == ("one",)
@@ -514,7 +522,6 @@ def test_failed_durable_intent_leaves_all_inputs(
             selected,
             (disposition("one", CompoundDecision.KEEP),),
             run_id=run_id,
-            publication_verified=False,
         )
     assert path.exists()
 
@@ -528,11 +535,11 @@ def test_repeated_drain_preserves_prior_success_and_archive(tmp_path: Path) -> N
     run_id = begin(loaded, selected)
     decisions = (disposition("one", CompoundDecision.KEEP),)
     original = archive_path(loaded, run_id, selected[0]).read_bytes()
-    first = drain_signals(loaded, selected, decisions, run_id=run_id, publication_verified=False)
+    first = drain_signals(loaded, selected, decisions, run_id=run_id)
     assert first.drained == ("one",)
     # A new input at the same path must not be removed by a retry of the old run.
     stored_signal(path, "one", body="# Newly observed\n\nAnother observation.\n")
-    second = drain_signals(loaded, selected, decisions, run_id=run_id, publication_verified=False)
+    second = drain_signals(loaded, selected, decisions, run_id=run_id)
     assert second.drained == ()
     assert second.diagnostics[0]["code"] == "signal-already-drained"
     assert path.exists()
@@ -571,9 +578,9 @@ def test_lost_acknowledgement_is_not_fabricated_as_success(
     with monkeypatch.context() as patch:
         patch.setattr(compounding, "append_compound_event", fail_after_intent)
         with pytest.raises(AdapterError, match="result"):
-            drain_signals(loaded, selected, decisions, run_id=run_id, publication_verified=False)
+            drain_signals(loaded, selected, decisions, run_id=run_id)
     assert not path.exists()
-    retried = drain_signals(loaded, selected, decisions, run_id=run_id, publication_verified=False)
+    retried = drain_signals(loaded, selected, decisions, run_id=run_id)
     assert retried.drained == ()
     assert retried.retained == ("one",)
     assert retried.diagnostics[0]["code"] == "drain-result-unknown"
@@ -596,11 +603,10 @@ def test_foreign_run_and_altered_selection_cannot_drain(tmp_path: Path) -> None:
             (replace(selected[0], fingerprint="sha256:" + "a" * 64),),
             decisions,
             run_id=run_id,
-            publication_verified=False,
         )
     foreign = replace(loaded, definition=replace(loaded.definition, workspace_id="repo:other"))
     with pytest.raises(ValidationError, match="workspace"):
-        drain_signals(foreign, selected, decisions, run_id=run_id, publication_verified=False)
+        drain_signals(foreign, selected, decisions, run_id=run_id)
     assert path.exists()
 
 
@@ -619,7 +625,6 @@ def test_torn_run_evidence_is_not_accepted(tmp_path: Path) -> None:
             selected,
             (disposition("one", CompoundDecision.KEEP),),
             run_id=run_id,
-            publication_verified=False,
         )
     assert path.exists()
 
@@ -680,9 +685,13 @@ def test_missing_owner_is_only_drainable_for_declared_deletion(
         selected,
         (disposition("one", decision),),
         run_id=run_id,
-        publication_verified=True,
-        publication=PublicationEvidence(
-            "published", repository="example/knowledge", commit="a" * 40
+        publications=(
+            PublicationEvidence(
+                "published",
+                repository="example/knowledge",
+                publication_verified=True,
+                commit="a" * 40,
+            ),
         ),
     )
     assert result.drained == (("one",) if decision == CompoundDecision.DELETE_RETIRE else ())
@@ -709,8 +718,14 @@ def test_foreign_configured_publication_retains_signal(tmp_path: Path) -> None:
         selected,
         (disposition("one", CompoundDecision.UPDATE),),
         run_id=run_id,
-        publication_verified=True,
-        publication=PublicationEvidence("published", repository="example/foreign", commit="a" * 40),
+        publications=(
+            PublicationEvidence(
+                "published",
+                repository="example/foreign",
+                publication_verified=True,
+                commit="a" * 40,
+            ),
+        ),
     )
     assert report.drained == ()
     assert report.retained == ("one",)
@@ -725,3 +740,172 @@ def test_start_rejects_edited_preview_before_archival(tmp_path: Path) -> None:
     with pytest.raises(AdapterError, match="changed"):
         begin(loaded, selected)
     assert not activity_path(loaded).exists()
+
+
+def publication(repository: str = "example/knowledge", **changes) -> PublicationEvidence:
+    return replace(PublicationEvidence("published", repository, True, commit="a" * 40), **changes)
+
+
+def test_multi_repository_drain_keeps_signal_specific_coverage_and_exact_evidence(
+    tmp_path: Path,
+) -> None:
+    from agent_knowledge.infrastructure.compound_evidence import evidence_records
+
+    loaded = workspace(tmp_path)
+    root = loaded.signal_storage.signal_root
+    selected = tuple(
+        snapshot(stored_signal(root / f"shared/{identifier}.md", identifier), identifier)
+        for identifier in ("complete", "partial", "unchanged", "edited", "deferred")
+    )
+    run_id = begin(loaded, selected)
+    new_signal = stored_signal(root / "shared/new.md", "new")
+    edited = root / "shared/edited.md"
+    stored_signal(edited, "edited", body="# Edited\n\nPreserve this new observation.\n")
+    required_owners = (
+        OwnerReference("guidance/example.md", source="knowledge"),
+        OwnerReference(".apm/skills/example/SKILL.md", repository="example/consumer"),
+    )
+    decisions = (
+        SignalDisposition(
+            "complete", CompoundDecision.UPDATE, "Both changes published.", required_owners
+        ),
+        SignalDisposition(
+            "partial",
+            CompoundDecision.UPDATE,
+            "Second consumer pending.",
+            (
+                *required_owners,
+                OwnerReference("guide.md", repository="example/second-consumer"),
+            ),
+        ),
+        disposition("unchanged", CompoundDecision.KEEP),
+        disposition("edited", CompoundDecision.UPDATE),
+        disposition("deferred", CompoundDecision.DEFER),
+    )
+    publications = (
+        publication(),
+        publication("example/consumer"),
+        publication("example/unrelated", publication_verified=False),
+    )
+    result = drain_signals(
+        loaded,
+        selected,
+        decisions,
+        run_id=run_id,
+        publications=publications,
+    )
+    assert result.drained == ("complete", "unchanged")
+    assert result.retained == ("deferred", "edited", "partial")
+    assert new_signal.exists()
+    assert edited.read_text().endswith("Preserve this new observation.\n")
+    evidence = evidence_records(loaded, run_id)
+    for event in (
+        item
+        for item in evidence
+        if item["operation"] in {"compound.drain", "compound.drain.intent"}
+    ):
+        reported = event["agent_report"]
+        assert "publication" not in reported
+        assert "publication_verified" not in reported
+        assert [item["repository"] for item in reported["publications"]] == [
+            "example/knowledge",
+            "example/consumer",
+            "example/unrelated",
+        ]
+        assert all(item["verification"] == "agent-reported" for item in reported["publications"])
+        assert [item["repository"] for item in event["artifacts"]["changes"]] == [
+            "example/knowledge",
+            "example/consumer",
+            "example/unrelated",
+        ]
+        # Missing optional local patch capture does not veto verified remote evidence.
+        assert all(item["status"] == "unavailable" for item in event["artifacts"]["changes"])
+        assert any(
+            item.get("publication_repository") == "example/knowledge"
+            for item in event["owner_resolution"]
+        )
+
+
+@pytest.mark.parametrize(
+    "decision", [CompoundDecision.UPDATE, CompoundDecision.CREATE, CompoundDecision.DELETE_RETIRE]
+)
+def test_source_without_publication_route_retains_writes_with_specific_diagnostic(
+    tmp_path: Path,
+    decision: CompoundDecision,
+) -> None:
+    loaded = workspace(tmp_path, publication_repository=None)
+    path = stored_signal(loaded.signal_storage.signal_root / "shared/one.md", "one")
+    selected = (snapshot(path),)
+    run_id = begin(loaded, selected)
+    result = drain_signals(
+        loaded,
+        selected,
+        (disposition("one", decision),),
+        run_id=run_id,
+        publications=(publication(),),
+    )
+    assert result.drained == ()
+    assert result.retained == ("one",)
+    assert {item["code"] for item in result.diagnostics} == {"missing-publication-route"}
+    assert path.exists()
+
+
+@pytest.mark.parametrize("decision", [CompoundDecision.KEEP, CompoundDecision.SKIP])
+@pytest.mark.parametrize("owner_state", ["missing-file", "unconfigured-source", "no-publication"])
+def test_non_write_decisions_ignore_owner_readability_and_publication_route(
+    tmp_path: Path,
+    decision: CompoundDecision,
+    owner_state: str,
+) -> None:
+    from agent_knowledge.infrastructure.compound_evidence import evidence_records
+
+    loaded = workspace(tmp_path, publication_repository=None)
+    decided = disposition("one", decision)
+    if owner_state == "missing-file":
+        (loaded.sources[0].root / "guidance/example.md").unlink()
+    elif owner_state == "unconfigured-source":
+        decided = replace(decided, owners=(OwnerReference("guide.md", source="other"),))
+    path = stored_signal(loaded.signal_storage.signal_root / "shared/one.md", "one")
+    selected = (snapshot(path),)
+    run_id = begin(loaded, selected)
+    result = drain_signals(loaded, selected, (decided,), run_id=run_id)
+    assert result.drained == ("one",)
+    assert result.retained == ()
+    assert result.diagnostics == ()
+    assert not path.exists()
+    event = evidence_records(loaded, run_id)[-1]
+    assert event["agent_report"]["publications"] == []
+    assert event["artifacts"]["changes"] == []
+
+
+@pytest.mark.parametrize("fault", ["pending", "unverified", "missing", "mismatch", "unavailable"])
+def test_incomplete_multi_repository_evidence_preserves_unchanged_signal(
+    tmp_path: Path,
+    fault: str,
+) -> None:
+    loaded = workspace(tmp_path)
+    path = stored_signal(loaded.signal_storage.signal_root / "shared/one.md", "one")
+    selected = (snapshot(path),)
+    run_id = begin(loaded, selected)
+    owner = OwnerReference("guide.md", repository="example/consumer")
+    decision = replace(
+        disposition("one", CompoundDecision.UPDATE),
+        owners=(
+            *disposition("one", CompoundDecision.UPDATE).owners,
+            owner,
+        ),
+    )
+    second = publication("example/consumer")
+    if fault == "pending":
+        second = replace(second, status="pending")
+    elif fault == "unverified":
+        second = replace(second, publication_verified=False)
+    elif fault == "mismatch":
+        second = replace(second, repository="example/unrelated")
+    elif fault == "unavailable":
+        second = replace(second, unavailable_reason="Required publication is not available.")
+    publications = (publication(),) if fault == "missing" else (publication(), second)
+    result = drain_signals(loaded, selected, (decision,), run_id=run_id, publications=publications)
+    assert result.drained == ()
+    assert result.retained == ("one",)
+    assert path.exists()

@@ -72,10 +72,11 @@ def test_compound_contract_describes_activity_and_drain_fields() -> None:
         "selected",
         "run_id",
         "outcome",
-        "publication",
+        "publications",
         "dispositions",
-        "publication_verified",
     }.issubset(result["fields"])
+    assert "publication" not in result["fields"]
+    assert "publication_verified" not in result["fields"]
     assert "unchanged" in result["fields"]["selected"]["description"]
 
 

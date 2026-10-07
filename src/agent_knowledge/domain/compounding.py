@@ -8,6 +8,7 @@ provider.
 """
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -56,7 +57,8 @@ class PublicationEvidence:
     """Carry agent assertions and optional exact local Git revision boundaries."""
 
     status: str
-    repository: str | None = None
+    repository: str
+    publication_verified: bool
     pull_request: int | None = None
     commit: str | None = None
     checkout: str | None = None
@@ -109,8 +111,7 @@ class CompoundRequest:
     run_id: str | None = None
     outcome: str | None = None
     dispositions: tuple[SignalDisposition, ...] = ()
-    publication_verified: bool = False
-    publication: PublicationEvidence | None = None
+    publications: tuple[PublicationEvidence, ...] = ()
     automatic: bool = False
     worker_id: str | None = None
     parent_session_id: str | None = None
@@ -120,6 +121,7 @@ class CompoundRequest:
 
 
 _FINGERPRINT = re.compile(r"sha256:[0-9a-f]{64}\Z")
+_COMMIT = re.compile(r"[0-9a-f]{40}(?:[0-9a-f]{24})?\Z")
 
 
 _WRITE_DECISIONS = frozenset(
@@ -176,28 +178,39 @@ def select_pull_request(
 def can_drain(
     disposition: SignalDisposition,
     *,
-    publication_verified: bool,
-    publication: PublicationEvidence | None = None,
+    publications: tuple[PublicationEvidence, ...] = (),
+    source_repositories: Mapping[str, str] | None = None,
 ) -> bool:
-    """Gate removal on a confirmed write or an explicit non-write decision."""
+    """Require agent-verified publication for each authored owner, or a no-write decision.
+
+    Source routes come from effective workspace configuration, never a publication
+    entry's claim. Local patch capture and PR presence alone prove no publication.
+    """
     if not disposition.rationale.strip():
         return False
     if disposition.decision in _NON_WRITE_DECISIONS:
         return True
-    return (
-        disposition.decision in _WRITE_DECISIONS
-        and publication_verified
-        and bool(disposition.owners)
-        and disposition.owner_unavailable_reason is None
-        and publication is not None
-        and publication.status == "published"
-        and publication.repository is not None
-        and bool(publication.commit or publication.pull_request)
-        and publication.unavailable_reason is None
-        and all(
-            owner.repository is None or owner.repository == publication.repository
-            for owner in disposition.owners
-        )
+    if (
+        disposition.decision not in _WRITE_DECISIONS
+        or not disposition.owners
+        or disposition.owner_unavailable_reason is not None
+        or len({item.repository for item in publications}) != len(publications)
+    ):
+        return False
+    verified_repositories = {
+        item.repository
+        for item in publications
+        if item.publication_verified
+        and item.status == "published"
+        and item.commit is not None
+        and _COMMIT.fullmatch(item.commit)
+        and item.unavailable_reason is None
+    }
+    sources = source_repositories or {}
+    return all(
+        (sources.get(owner.source) if owner.source is not None else owner.repository)
+        in verified_repositories
+        for owner in disposition.owners
     )
 
 
@@ -206,8 +219,8 @@ def drainable_snapshots(
     dispositions: tuple[SignalDisposition, ...],
     *,
     current_fingerprints: dict[str, str],
-    publication_verified: bool,
-    publication: PublicationEvidence | None = None,
+    publications: tuple[PublicationEvidence, ...] = (),
+    source_repositories: Mapping[str, str] | None = None,
 ) -> tuple[SignalSnapshot, ...]:
     """Return only selected, handled signals whose complete bytes are unchanged.
 
@@ -225,7 +238,7 @@ def drainable_snapshots(
     for signal_id, disposition in dispositions_by_id.items():
         snapshot = snapshot_by_id.get(signal_id)
         if snapshot is None or not can_drain(
-            disposition, publication_verified=publication_verified, publication=publication
+            disposition, publications=publications, source_repositories=source_repositories
         ):
             continue
         if current_fingerprints.get(signal_id) == snapshot.fingerprint:
@@ -254,8 +267,7 @@ def parse_compound_request(value: object) -> CompoundRequest:
             "run_id",
             "outcome",
             "dispositions",
-            "publication",
-            "publication_verified",
+            "publications",
         },
     )
     action = read_string(fields["action"], "action")
@@ -293,10 +305,7 @@ def parse_compound_request(value: object) -> CompoundRequest:
     run_id = _optional_request_text(fields.get("run_id"), "run_id")
     outcome = _optional_request_text(fields.get("outcome"), "outcome")
     dispositions = _request_dispositions(fields.get("dispositions", []), "dispositions")
-    publication = _request_publication(fields.get("publication"))
-    publication_verified = fields.get("publication_verified", False)
-    if not isinstance(publication_verified, bool):
-        raise ValidationError("invalid-type", "publication_verified", "Expected a boolean.")
+    publications = _request_publications(fields.get("publications", []))
     if action == "start":
         if workspace_id is None:
             raise ValidationError("missing-field", "workspace_id", "Start requires workspace_id.")
@@ -311,8 +320,7 @@ def parse_compound_request(value: object) -> CompoundRequest:
                 "selected",
                 "outcome",
                 "dispositions",
-                "publication",
-                "publication_verified",
+                "publications",
                 "automation_id",
             )
         ):
@@ -359,8 +367,7 @@ def parse_compound_request(value: object) -> CompoundRequest:
         run_id=run_id,
         outcome=outcome,
         dispositions=dispositions,
-        publication_verified=publication_verified,
-        publication=publication,
+        publications=publications,
     )
 
 
@@ -462,15 +469,25 @@ def _request_owners(value: object, path: str) -> tuple[OwnerReference, ...]:
     return tuple(result)
 
 
-def _request_publication(value: object) -> PublicationEvidence | None:
-    if value is None:
-        return None
+def _request_publications(value: object) -> tuple[PublicationEvidence, ...]:
+    if not isinstance(value, list):
+        raise ValidationError("invalid-type", "publications", "Expected a list of publications.")
+    result = tuple(
+        _request_publication(item, f"publications[{index}]") for index, item in enumerate(value)
+    )
+    if len({item.repository for item in result}) != len(result):
+        raise ValidationError(
+            "duplicate-value", "publications", "Publication repositories must be unique."
+        )
+    return result
+
+
+def _request_publication(value: object, path: str) -> PublicationEvidence:
     fields = read_mapping(
         value,
-        "publication",
-        {"status"},
+        path,
+        {"status", "repository", "publication_verified"},
         {
-            "repository",
             "pull_request",
             "commit",
             "checkout",
@@ -479,22 +496,25 @@ def _request_publication(value: object) -> PublicationEvidence | None:
             "unavailable_reason",
         },
     )
-    status = read_string(fields["status"], "publication.status")
+    status = read_string(fields["status"], f"{path}.status")
     if status not in {"published", "not-required", "unavailable", "pending"}:
-        raise ValidationError("invalid-value", "publication.status", "Unknown publication status.")
+        raise ValidationError("invalid-value", f"{path}.status", "Unknown publication status.")
+    repository = read_string(fields["repository"], f"{path}.repository")
+    verified = fields["publication_verified"]
+    if not isinstance(verified, bool):
+        raise ValidationError("invalid-type", f"{path}.publication_verified", "Expected a boolean.")
     number = fields.get("pull_request")
     if number is not None and (
         isinstance(number, bool) or not isinstance(number, int) or number < 1
     ):
         raise ValidationError(
-            "invalid-value", "publication.pull_request", "Expected a positive integer."
+            "invalid-value", f"{path}.pull_request", "Expected a positive integer."
         )
     if ("before_revision" in fields) != ("after_revision" in fields):
-        raise ValidationError("missing-field", "publication", "Provide both revision boundaries.")
+        raise ValidationError("missing-field", path, "Provide both revision boundaries.")
     values = {
-        key: _optional_request_text(fields.get(key), f"publication.{key}")
+        key: _optional_request_text(fields.get(key), f"{path}.{key}")
         for key in (
-            "repository",
             "commit",
             "checkout",
             "before_revision",
@@ -502,11 +522,20 @@ def _request_publication(value: object) -> PublicationEvidence | None:
             "unavailable_reason",
         )
     }
+    commit = values["commit"]
+    if commit is not None and not _COMMIT.fullmatch(commit):
+        raise ValidationError("invalid-value", f"{path}.commit", "Expected a full commit hash.")
     if status == "unavailable" and values["unavailable_reason"] is None:
         raise ValidationError(
-            "missing-field", "publication.unavailable_reason", "Explain unavailable evidence."
+            "missing-field", f"{path}.unavailable_reason", "Explain unavailable evidence."
         )
-    return PublicationEvidence(status=status, pull_request=number, **values)
+    return PublicationEvidence(
+        status=status,
+        repository=repository,
+        publication_verified=verified,
+        pull_request=number,
+        **values,
+    )
 
 
 def _optional_request_text(value: object, path: str) -> str | None:

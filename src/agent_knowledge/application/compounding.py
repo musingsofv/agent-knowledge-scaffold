@@ -129,8 +129,7 @@ def compound_result(workspace: Workspace, value: object) -> CompoundResult:
         request.selected,
         request.dispositions,
         run_id=request.run_id or "",
-        publication_verified=request.publication_verified,
-        publication=request.publication,
+        publications=request.publications,
     )
     return {
         "action": "drain",
