@@ -3,22 +3,120 @@ name: knowledge-compound
 license: 0BSD
 description: >
   Process durable knowledge signals into validated updates and dispositions.
-  Use when running a scheduled or manual compounding run. Do not use when
+  Use for scheduled, delegated or manual compounding. Do not use when
   doing first-time setup; use knowledge-setup. Success means every selected
   signal has a recorded outcome and safe drain decision.
 ---
 
 # Knowledge compounding
 
-Run this skill manually or from one native harness automation. It is an
+Run this skill manually, from the selected local schedule, or as a delegated
+worker requested by the prompt fallback. It is an
 agent-driven workflow: the CLI validates explicit values and guards files, and
 the agent chooses searches, owners, applicability, publication and when to
 stop. There is no hidden search planner, semantic engine, scheduler or
 automatic merge.
 
+## Accept delegated work safely
+
+For prompt-triggered compounding, native subagents are the execution interface.
+The prompt hook is the scheduling fallback when durable native local scheduling
+is unavailable. Delegate, message and reuse workers only through the active
+harness's native subagent tools. Never launch a worker as a shell subprocess
+running `codex exec`, `claude -p`, `copilot -p` or another model CLI. Shell tools
+may run the selected knowledge runtime and repository checks; they do not
+replace native delegation. If native subagent tools are unavailable, report
+that prerequisite and leave prompt-triggered compounding pending.
+
+A prompt reminder is advisory, not ownership of a run. The parent passes the
+exact installed skill and runtime paths, explicit profile/registry or config
+selector, originating consumer instructions and verified publication routes, and available
+provider/parent-session/worker handles. Keep these separate from each signal's
+origin. Omit unknown handles; never invent them or reuse a handle from another
+provider. Prompt fallback has no scheduler-provided automation handle: omit
+`automation_id` unless an actual scheduling surface exposes one. Never copy the
+trigger owner, task name, workspace marker or worker ID into that field.
+Preserve an existing signal's separate origin without inventing new provenance.
+Keep the parent's ordinary task independent of this work.
+
+Begin the native worker's task with the exact marker
+`[agent-knowledge-compound-worker]`. It identifies an already assigned worker
+so inherited prompt hooks omit another delegation reminder while preserving
+reflection. This marker is role context, not authorization, a lock or evidence
+that a run started. Preserve the original parent's handle in the handoff;
+the worker's own hook session is not a replacement parent identity.
+
+For a marked Copilot worker, the setup-bound child hook reasserts the exact
+runtime, selector and installed skill. It exposes the child hook session as
+`worker_id` and `session_id`, using the supported binding's verified mapping
+to the native `agentId`. Keep `parent_session_id` from the explicit parent
+handoff; never derive it from the child hook. This bound context grants no
+authorization or run ownership. A missing or conflicting setup binding or
+required handoff is a visible prerequisite: report it and do not substitute a
+default or different profile. The hook does not supply the consumer instructions
+or publication context required in the parent handoff above.
+
+Load this skill in the worker. Do not delegate another opportunistic compound
+worker or act on inherited reminders recursively. Reuse an existing worker
+through the provider's supported mechanism when it is still available; a
+stored ID does not prove that it can resume after the session ends. Record
+`worker_id` and `parent_session_id` on the start request when exposed, alongside
+`harness` and the worker's exact `session_id`. A provider may expose the native
+worker handle only to the parent after delegation. The parent should pass it
+through the provider's supported worker-message mechanism when available. Do
+not wait indefinitely before starting, invent a handle or infer it from a local
+filename when the provider has not exposed it.
+
+When the exact native worker ID becomes available after start, the parent or
+worker associates it with the exact returned run ID through the selected CLI's
+metadata-only `record-worker` action. This also works after finish; do not rerun
+compounding just to fill provenance. For example, replace these illustrative
+handles only with provider-exposed values:
+
+~~~yaml
+action: record-worker
+run_id: compound-returned-run-id
+worker_id: exact-exposed-subagent-handle
+parent_session_id: exact-exposed-parent-handle
+harness: codex
+~~~
+
+Only `run_id` and `worker_id` are required. Optional parent/provider fields must
+agree with already recorded values; omit unavailable ones. Repeating the same
+identity is idempotent; a conflict needs inspection, not replacement with another
+handle. The CLI records the association in the existing activity log and run
+evidence without changing completion, ownership, publication or drain decisions.
+The worker reports its returned run ID to the parent, which retains it alongside
+the native delegation result. A later provider-exposed ID can then be attached
+without guessing which run it belongs to.
+
+Run the readiness, activity and complete signal inventory steps below. Before
+editing any owner, publishing, draining or finalizing a run, call compound
+`start` with `automatic: true` and the selected snapshots. It atomically
+rechecks the configured trigger and due state under the shared lifecycle lock.
+If it returns `started: false`, exit quietly without touching the winning run;
+this includes a stale reminder whose earlier worker has already finished.
+Redundant worker spawns are acceptable. Never replace this guard with a
+handwritten timestamp, pre-spawn reservation or elapsed-time takeover.
+
+If activity identifies this exact worker's already started run, inspect its
+archives, dispositions and publication/drain evidence before continuing that
+run. A foreign, interrupted or ambiguous active run is not permission to start
+another one. Resolve the actual worker and evidence, then finish or continue
+that recorded run truthfully before a new attempt. If a recovered attempt uses
+a different worker, retain the earlier run identity with `recovery_of` on the
+new start, after resolving the earlier active run. Do not fabricate resumability
+or finish another live worker's run merely to clear the guard.
+
+After a successful start, the rest of this skill applies unchanged: discover
+actual owners, isolate edits, run native checks, verify remote publication and
+use guarded drainage. Background execution grants no additional policy or
+merge permission. Report meaningful results, ready-for-review PR links and
+required owner actions to the parent; a duplicate or empty run stays quiet.
+
 ## Start from the originating workspace
 
-Use the exact profile and absolute registry carried by the automation, or its
+Use the exact profile and absolute registry carried by the task/reminder, or its
 explicit configuration path. Run `describe` and follow the installed guide's
 session-selection procedure before configured work. Confirm `context`/`doctor`
 and keep that selector on every call, including `--compound-run-id` calls.
@@ -79,7 +177,9 @@ another provider, continue self-contained from the signal body and evidence.
 Do not copy a transcript into canonical knowledge.
 
 Call compound start with the workspace ID, selected snapshots, harness and
-opaque provider handles for this compounding run. The tool supplies the UTC
+opaque provider handles for this compounding run. Delegated prompt-triggered workers
+add `automatic: true` plus the available worker fields described above; manual
+and native-scheduled runs use the normal explicit start. The tool supplies the UTC
 timestamp and archives each selected input before recording the run:
 
 ~~~yaml
@@ -87,14 +187,16 @@ action: start
 workspace_id: workspace:example
 harness: codex
 session_id: opaque-session-id
-automation_id: opaque-automation-id
 selected:
   - id: index-observation
     path: /work/knowledge/ai/signals/projects/orders/20260910T090000Z-one.md
     fingerprint: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 ~~~
 
-Use that object as the compound start request. The returned run_id is required
+Use that object as the compound start request. Native scheduled runs may also
+include their exact provider-exposed `automation_id`; this example does not
+supply one. Prompt-triggered workers must not manufacture an automation handle.
+The returned run_id is required
 for drain and finish. The tool owns immutable signal archives, receipts and
 pre-removal intent; never create these manually or move/delete inbox inputs.
 Archival is mandatory even when optional diagnostic collection is disabled.
@@ -317,13 +419,36 @@ Missing archives or failed durable writes retain inputs. Changed, new, missing,
 malformed, symlinked or uncertain inputs remain in the inbox. Partial cleanup
 is reported; never recreate a removed signal merely to make a count match.
 
-Finish every started run with its agent-reported outcome and dispositions.
+Finish every started run with its agent-reported outcome, dispositions and a
+truthful structured `completion` value. Free-form `outcome` text alone never
+establishes automatic completion:
+
+- `completed`: every selected signal has a supported disposition, including
+  confirmed no-update cases. Retention is still possible for edited/new inputs.
+- `deferred`: every selected signal has a disposition, but a prerequisite or
+  unresolved owner means some work remains. State the concrete reason.
+- `failed`: this attempt could not complete its evaluation; preserve unfinished
+  work and report the next inspection. It has a bounded retry delay.
+- `empty`: complete discovery found no eligible work and no selected inputs.
+  It does not postpone consideration of later-arriving signals. Malformed or
+  unresolved candidates are not proof of emptiness; report them with `failed`
+  or fully dispositioned `deferred` instead of causing a fresh worker per prompt.
+
+For prompt fallback, `completed` and `deferred` wait the configured interval
+(default rolling 24 hours); `failed` waits the retry interval (default one
+hour). A failure does not shorten an earlier completion interval; wait until
+both applicable deadlines have passed. A later completed/deferred run supersedes
+earlier failed attempts. Reminder delivery or worker creation does not start
+either interval.
+An unfinished active run remains active until evidence-based recovery; no timer
+clears it. Do not label failed or interrupted work `empty` to evade the guard.
 Do not submit drained counts: the tool derives them from recorded drain results:
 
 ~~~yaml
 action: finish
 run_id: compound-opaque-run-id
 outcome: published
+completion: completed
 dispositions:
   - signal_id: index-observation
     decision: update

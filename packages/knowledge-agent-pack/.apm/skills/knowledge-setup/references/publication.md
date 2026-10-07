@@ -82,12 +82,13 @@ review and merge. Reuse the user's authorization; no extra per-consumer opt-in
 is required. Preserve actual user restrictions rather than carrying forward an
 agent's unsupported assumption that another permission request is necessary.
 
-When creating or updating the native automation, record the participating
+When configuring a local schedule or prompt fallback, record the participating
 consumer checkout paths, verified repository identities and base branches, and
 point to each repository's authored-source/native-check instructions. Keep this
-route list once in that task prompt, including any explicit user exceptions.
-Adding a repository to a shared profile updates the same automation and route
-list; it does not create a duplicate job or restrict it to the first consumer.
+route list once in the task prompt or existing authored setup context passed
+to delegated workers, including any explicit user exceptions. Adding a
+repository to a shared profile updates the same trigger context and route list;
+it does not create a duplicate job or restrict it to the first consumer.
 Manual compounding can use the same routes supplied in the user's context.
 Do not add unsupported consumer-publication keys to the workspace YAML: source
 publication blocks configure central knowledge, while skill/instruction PRs

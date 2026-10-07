@@ -278,3 +278,63 @@ def test_owner_identity_is_unambiguous_and_contained(owner) -> None:
                 ],
             }
         )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"automatic": "yes"},
+        {"completion": "succeeded"},
+        {"worker_id": "bad\nhandle"},
+        {"parent_session_id": "bad\nhandle"},
+        {"expected_trigger": {"mode": "prompt", "owner": "shared", "unknown": True}},
+    ],
+)
+def test_reject_invalid_automatic_fields(changes: dict[str, object]) -> None:
+    with pytest.raises(ValidationError):
+        parse_compound_request({"action": "status", **changes})
+
+
+def test_exact_worker_context_and_trigger_compare_are_parsed() -> None:
+    request = parse_compound_request(
+        {
+            "action": "start",
+            "workspace_id": "workspace:example",
+            "automatic": True,
+            "worker_id": "provider:opaque/worker",
+            "parent_session_id": "parent:opaque/session",
+            "recovery_of": "compound-prior",
+        }
+    )
+    assert request.worker_id == "provider:opaque/worker"
+    assert request.parent_session_id == "parent:opaque/session"
+    trigger_request = parse_compound_request(
+        {"action": "configure-trigger", "expected_trigger": {"mode": "prompt", "owner": "shared"}}
+    )
+    assert trigger_request.expected_trigger.interval_seconds == 86400
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {"action": "record-worker", "run_id": "compound-example"},
+        {"action": "record-worker", "worker_id": "native-worker"},
+        {
+            "action": "record-worker",
+            "run_id": "compound-example",
+            "worker_id": "native-worker",
+            "selected": [],
+        },
+        {
+            "action": "record-worker",
+            "run_id": "compound-example",
+            "worker_id": "native-worker",
+            "automation_id": "trigger-owner",
+        },
+    ],
+)
+def test_worker_attachment_accepts_only_complete_identity_metadata(
+    value: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError):
+        parse_compound_request(value)

@@ -82,7 +82,7 @@ def ensure_directory(path: Path, *, exclusive: bool = False) -> None:
 
 
 @contextmanager
-def usage_lock(path: Path) -> Iterator[None]:
+def usage_lock(path: Path, *, blocking: bool = True) -> Iterator[None]:
     """Serialize a lifecycle through a persistent no-follow lock file."""
     ensure_directory(path.parent)
     try:
@@ -96,7 +96,12 @@ def usage_lock(path: Path) -> Iterator[None]:
             except FileExistsError:
                 descriptor = os.open(path.name, flags, dir_fd=directory)
             try:
-                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                try:
+                    fcntl.flock(descriptor, fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB))
+                except BlockingIOError as error:
+                    raise AdapterError(
+                        "usage-lock-busy", str(path), "Lifecycle lock is busy."
+                    ) from error
                 opened = os.fstat(descriptor)
                 current = os.stat(path.name, dir_fd=directory, follow_symlinks=False)
                 if (

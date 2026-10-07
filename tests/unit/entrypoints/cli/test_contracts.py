@@ -14,6 +14,7 @@ def test_default_description_exposes_available_commands_and_authoring_resources(
     assert set(result["commands"]) == {
         "describe",
         "doctor",
+        "preflight",
         "context",
         "catalog",
         "search",
@@ -122,3 +123,16 @@ def test_description_rejects_unknown_selectors(query_data: object, code: str, pa
     with pytest.raises(ValidationError) as caught:
         describe(query_data)
     assert (caught.value.code, caught.value.path) == (code, path)
+
+
+def test_preflight_contract_is_narrow_and_explicit():
+    result = describe({"schema": "preflight"})
+    assert set(result["fields"]) == {
+        "mode",
+        "provider",
+        "expected_execution",
+        "expected_venv",
+        "expected_workspace_id",
+        "consumer",
+    }
+    assert all(not field["required"] for field in result["fields"].values())

@@ -1,40 +1,41 @@
-# Claude Code recurring task
+# Claude Code local compounding
 
-Use the Claude Code native recurring-task command exposed by the installed
-version. On versions that support loop syntax, a daily task can be created
-with:
+Inspect the installed Claude Code version and actual local task surface. A
+session-only `/loop` or `/every` is an attended convenience, not durable daily
+scheduling. Unless a verified durable native local schedule is available, use
+[the prompt fallback](local-compounding.md). Preserve an existing working local
+schedule and its single shared-store owner; do not activate both modes.
 
-~~~text
-/loop 1d Run the installed knowledge-compound skill using /work/knowledge/.agent-knowledge-venv/bin/agent-knowledge with --settings /work/local/profiles.yaml --profile work on every configured call. Process pending signals, follow its publication and drain policy, and report retained/drained inputs. Do not merge PRs or force-push. Marker: agent-knowledge-compound:workspace:example
-~~~
+Bind the package-owned `UserPromptSubmit` hook through setup, configure mode
+`prompt`, and verify an ordinary prompt delegates a worker loading the installed
+`knowledge-compound` skill. Hand off the exact launcher, profile and registry
+(or explicit config), originating consumer and available provider/session/worker
+handles. The worker rechecks eligibility atomically before edits, publication or
+drain; duplicate workers exit. The main task can continue. No qualifying prompt
+means no run; the rolling interval is not a calendar daily guarantee.
 
-Some installations expose the same feature as /every; use the provider syntax
-shown by its own help. Keep the marker exact, set the timezone in the native
-task configuration and leave the pause/remove controls visible.
+Native subagent tools are the execution interface. Begin the worker's task with
+`[agent-knowledge-compound-worker]` as the shared reference requires. Never use
+shell-started `claude -p` or another model CLI as the worker. Missing native
+subagent tools leave prompt-triggered compounding pending.
 
-Before creating a task, list existing recurring tasks and update the one with
-the marker. Multiple matches require a developer decision. A task must invoke
-the installed knowledge-compound skill with the absolute launcher and pinned
-registry/profile selector (or direct configuration path). It must not compile
-APM on every run or depend on a shell-startup variable.
+If the actual local installation offers a durable native task, inspect and
+reuse the exact `agent-knowledge-compound:<workspace_id>` marker, configure
+`local-schedule` through the shared procedure and keep its pause/remove controls
+visible. Pin the installed skill, absolute launcher and selector in the task;
+include the verified consumer publication routes. Verify its run-now behavior
+before claiming readiness, subject to any explicit verification pause. Do not
+substitute a daemon, cron/systemd job or shell-startup mutation.
 
-Trigger one immediate run and confirm that configured doctor and the activity
-log are reached. If the installed Claude Code version lacks recurring tasks or
-authentication, stop and report its remediation. Do not substitute a daemon,
-cron loop, launchctl mutation or hidden background process.
+The session must activate the intended credential profile through the consumer's
+bound `SessionStart` hook or an established local provider credential surface.
+The profile in a reminder/task selects knowledge only. One consumer hook binds
+one profile for new local Claude sessions; use separate consumer configurations
+and local sessions for simultaneous different credential profiles. Unrelated
+unfinished mappings do not block local knowledge work; missing credentials
+required for publication remain pending. Never copy values into a task prompt.
 
-Pin the absolute launcher, registry and explicit profile as shown above;
-never depend on the global default. Direct setup can substitute an absolute
-`--config` selector. Follow [profile setup](profiles.md) for alias/store ownership
-and conflict checks before creating or updating a task.
-
-For operations that require external credentials, the scheduled session must
-use the intended credential profile through Claude's native environment/secret
-surface or the consumer's bound SessionStart hook. Unrelated unfinished
-mappings do not block local compounding; required publication authentication
-does. Pending setup binds reminders without credential activation. The profile in the task prompt selects
-knowledge; it does not select credentials. One consumer hook binds one profile
-for all new local Claude sessions, so use a separate consumer/project
-configuration or provider-native cloud environment when simultaneous tasks need
-different profiles. Never copy a credential value into the task prompt. A task
-cannot change credential profiles midway through a run.
+Use the [shared trigger procedure](local-compounding.md#pause-remove-and-report)
+for pause, removal, interval, retry and readiness reporting. A stored worker
+handle is provenance and possible reuse information, not a promise that Claude
+can resume that worker indefinitely.

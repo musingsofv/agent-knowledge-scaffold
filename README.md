@@ -14,12 +14,13 @@ for updates. Setup helps establish both; a second scaffold checkout is unnecessa
 See [first-time setup](docs/fresh-consumer.md#create-your-knowledge-instance).
 
 The installed `agent-knowledge` launcher provides `describe`, `doctor`,
-`context`, `catalog`, `search`, `inspect`, `validate`, `signal record`,
+`context`, `preflight`, `catalog`, `search`, `inspect`, `validate`, `signal record`,
 `signal list`, `compound`, `usage export` and `profiles list`. The neutral APM package supplies setup and
-compounding skills plus discovery/reflection hooks. Current follow-up work is
-tracked slice by slice in the final-pass plan below; the master plan retains
-the core implementation history and its proof boundaries.
+compounding skills plus discovery/reflection and conditional compounding hooks. Plans and evidence are linked
+below; completed plans retain implementation history and proof boundaries.
 
+- [Local compounding fallback and container setup](ai/plans/local-compounding-hooks-and-container-setup.md)
+- [Planned existing-container setup and launch readiness](ai/plans/container-setup-and-launch-readiness.md)
 - [Named-profile plan and proof](ai/plans/knowledge-profiles.md)
 - [Completed final-pass plan: B1-B5](ai/plans/knowledge-final-pass.md)
 - [Master core plan and implementation history](ai/plans/organization-neutral-knowledge-core.md)
@@ -58,6 +59,24 @@ configured credential profile. Direct `--config` is a separate workspace-only
 alternative and does not activate a profile environment. The
 [installed guide](docs/agent-contract.md#select-a-knowledge-profile-for-this-session)
 explains defaults, per-session selection and overrides.
+
+For local compounding, setup prefers a verified durable native schedule. CLI
+surfaces without one use a prompt-triggered fallback: the next ordinary prompt
+checks whether work is due and asks a delegated worker to load the installed
+skill. The existing activity log coordinates shared stores; repeated reminders
+cannot authorize competing runs. No prompt means no automatic run. See the
+[local trigger contract](packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/local-compounding.md).
+
+Keep your own container image and tools. Install the pinned wheel at image
+build, then use `--runtime-mode existing --portable-hooks` after mounts are
+available to verify and bind without reinstalling or writing into the venv.
+See [container setup](packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/containers.md).
+Setup first establishes where the agent tools and harness execute. It can
+prepare a private container-local profile, then emits a value-free launch recipe
+with an installed `preflight` check. Verify retrieval, writes, credentials and
+native hooks through the actual launcher; subsequent launches do not reinstall
+or recompile. The container reference distinguishes setup checks from native
+sandbox and hook evidence. No scaffold container image is supplied.
 
 ## Develop the core
 
@@ -340,4 +359,4 @@ opt-out are preserved; missing destination/access is reported as pending. Raw
 configurations without a publication block still disable publication. Missing or unauthenticated
 providers are reported individually rather than prompting for a subset.
 The compounding skill processes signals with validated dispositions and guarded
-draining; scheduling remains a harness responsibility.
+draining; setup selects durable local scheduling or the conditional prompt fallback.

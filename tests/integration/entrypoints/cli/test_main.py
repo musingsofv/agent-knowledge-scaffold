@@ -38,6 +38,7 @@ def test_default_describe_does_not_read_stdin_or_require_configuration(
     assert set(result["commands"]) == {
         "describe",
         "doctor",
+        "preflight",
         "context",
         "catalog",
         "search",
@@ -595,3 +596,13 @@ def test_cli_signal_request_errors_are_structured_and_do_not_create_inbox(
     assert "results" not in result
     assert authored.exists()
     assert not (tmp_path / "scaffold/ai").exists()
+
+
+def test_preflight_retains_runtime_when_configuration_missing(tmp_path, capsys):
+    assert main(["--config", str(tmp_path / "missing.yaml"), "preflight"]) != 0
+    result = output(capsys)
+    assert result["schema_version"] == "knowledge-preflight.v1"
+    assert result["status"] == "error"
+    assert result["execution"]["harness_location"] == "unverified"
+    assert result["runtime"]["interpreter"]
+    assert "receipt" not in result

@@ -103,8 +103,8 @@ the harness-specific mechanism.
    Prepare its authored source before the chosen compilation stage; if already
    compiled, regenerate through the same owned commands and rebind as needed.
 7. Compare the resolved physical signal store and configuration route with any
-   existing automation before registration. Keep the workspace marker and one
-   owner for the store across all providers. Equivalent aliases reuse the task;
+   existing trigger before activation. Keep the workspace marker and one
+   owner/mode for the store across all providers. Equivalent aliases reuse it;
    incompatible source/scope/publication routes for the same store need a
    configuration decision, not a competing task. Do not alter unrelated tasks.
    Hooks remain one generic installation per consumer, independent of labels.
@@ -167,9 +167,12 @@ workspace route in the consumer's existing instructions where needed. Creating
 another label alone or switching this session does not authorize changing a
 repository recommendation.
 
-## Pin scheduled work
+## Pin scheduled and delegated work
 
-For a profile-based automation, pin **all three** values in the task prompt:
+For a profile-based local task or delegated worker, pin **all three** values
+in the handoff: installed launcher, explicit profile and absolute registry.
+Portable hooks resolve environment-local paths before constructing that handoff.
+For example:
 
 ```text
 Run the installed knowledge-compound skill using
@@ -183,11 +186,14 @@ force-push. Marker: agent-knowledge-compound:workspace:personal
 For direct setup, substitute `--config /absolute/knowledge-workspace.yaml`.
 Include the participating consumer routes and standing compounding PR policy
 from [publication setup](publication.md#include-every-participating-consumer).
-When another consumer shares the profile/store, update that same task's routes;
+When another consumer shares the profile/store, update the same task or
+authored setup context and its worker handoff routes;
 do not add a separate publication opt-in or narrow the task to its working directory.
 Do not depend on the global default. Changes to cadence, launcher or provider
-registration take effect through setup updating the native task. Profile edits
-affect future explicit CLI calls; active compounding runs reject changed routing.
+registration take effect through setup updating the selected local trigger.
+Use [local compounding](local-compounding.md) to reconcile `setup.compounding`
+with the existing activity log; do not create per-alias timestamps or jobs.
+Profile edits affect future explicit CLI calls; active compounding runs reject changed routing.
 
 ## Activate credentials for a new session
 

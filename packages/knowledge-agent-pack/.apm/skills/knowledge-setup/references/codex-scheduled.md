@@ -1,47 +1,52 @@
-# Codex Scheduled
+# Codex local compounding
 
-Use the Codex Scheduled task surface for recurring compounding. Create or
-update one visible task whose name or metadata contains:
+Inspect the actual Codex surface. A verified Codex desktop Scheduled task can
+provide durable local recurrence. Codex CLI alone does not inherit that app
+capability: use the [prompt fallback](local-compounding.md) when no durable
+native local schedule is available. Keep existing working local tasks; never
+enable an independent fallback for the same signal store alongside one.
 
-~~~text
+For desktop scheduling, search for the exact marker first:
+
+```text
 agent-knowledge-compound:<workspace_id>
-~~~
+```
 
-Example task prompt:
+Reuse its task, configure cadence/timezone through the native editor and record
+`local-schedule` using the shared trigger procedure. Multiple matching owners
+need resolution. Use a short task prompt:
 
-~~~text
+```text
 Run the installed knowledge-compound skill using
 /work/knowledge/.agent-knowledge-venv/bin/agent-knowledge with
---settings /work/local/profiles.yaml --profile work on every configured call. Process pending signals for this
-workspace, follow its publication and drain policy, and report the run,
-dispositions and retained/drained inputs. Do not merge PRs or force-push.
-~~~
+--settings /work/local/profiles.yaml --profile work on every configured call.
+Process pending signals using its ownership, publication and guarded-drain
+rules. Report meaningful results and retained inputs. Do not merge PRs or
+force-push. Preserve exact provider session and automation handles when exposed.
+```
 
-Set the requested cadence and timezone in the native task editor. If a task
-with the marker already exists, update it instead of creating another one.
-Multiple matching tasks are an ownership conflict that needs developer input.
-The task's native pause and remove controls must remain visible.
+Add verified participating-consumer routes from [publication setup](publication.md).
+Direct setup can replace the profile selector with an absolute `--config`.
+Never depend on the global default. Trigger one supported run-now execution
+before claiming schedule readiness, unless that verification is explicitly
+paused; report missing proof truthfully. Keep native pause/remove controls in
+the setup report. Missing authentication is a readiness problem, not evidence
+that changing trigger mode will fix it.
 
-When the task runs, pass the harness name and the provider's opaque session or
-automation handle to the skill when available. The signal retains those values
-as provenance; they are not credentials and do not change canonical
-applicability. A run with no resumable originating session still proceeds from
-the self-contained signal.
+For CLI fallback, bind the installed prompt hook, select `prompt`, and verify
+an ordinary `UserPromptSubmit` turn delegates the installed compound skill. The
+execution interface is Codex's exposed native subagent tools. Start the worker
+task with `[agent-knowledge-compound-worker]` as the shared reference requires;
+never use shell-started `codex exec` or another model CLI as the worker. Missing
+native subagent tools leave prompt-triggered compounding pending. The
+main agent continues user work. The worker atomically rechecks eligibility;
+repeat prompts and redundant workers cannot authorize competing compounding.
+Report the rolling interval and that no prompts means no run. Pause/remove use
+the [shared trigger procedure](local-compounding.md#pause-remove-and-report).
 
-Run once immediately from the task's run-now control. Confirm the installed
-launcher and explicit doctor command are reached and inspect the activity
-record. If Scheduled is unavailable or authentication is missing, stop and
-show the Codex setup remediation. Do not replace it with a daemon, cron,
-launchctl change or shell-startup edit.
-
-Pin the absolute launcher, registry and explicit profile as shown above;
-never depend on the global default. Direct setup can substitute an absolute
-`--config` selector. Follow [profile setup](profiles.md) for alias/store ownership
-and conflict checks before creating or updating a task.
-
-For operations that require external credentials, pin the corresponding
-profile's credentials in the Scheduled task's supported native environment or
-service store. Unrelated unfinished mappings do not block local compounding;
-required publication authentication does. Codex has
-no generic profile env-file field to infer here. Never put values in the prompt;
-the knowledge selector does not switch credentials inside a running task.
+Credentials belong to the chosen local process or the Scheduled task's verified
+native credential surface. Codex desktop has no generic profile env-file field
+to infer. The setup-generated CLI launcher activates the selected profile for
+a new CLI process; a knowledge selector alone does not. Never put values in a
+prompt or copy them into hook configuration. Unrelated unfinished mappings stay
+visible without blocking local knowledge readiness.

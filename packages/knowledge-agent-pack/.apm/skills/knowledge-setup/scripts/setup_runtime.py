@@ -18,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
@@ -156,6 +157,13 @@ def _parser() -> argparse.ArgumentParser:
         help="Virtual environment path (default: <workspace-config-parent>/.agent-knowledge-venv).",
     )
     parser.add_argument("--package", type=Path, required=True)
+    parser.add_argument(
+        "--runtime-mode",
+        choices=("install", "existing"),
+        default="install",
+        help="Install the package, or verify existing runtime contents "
+        "against --package without writes.",
+    )
     parser.add_argument("--consumer", type=Path, required=True)
     parser.add_argument(
         "--apm-mode",
@@ -245,13 +253,32 @@ def _provider_hook_command(
     environment: dict[str, object] | None,
     *,
     portable_profile: str | None = None,
+    compound_binding: dict[str, Any] | None = None,
 ) -> str:
     if portable_profile is not None:
-        return _shell_command(
-            [_DESCRIPTOR_HOOK_COMMAND, "--provider", target, "--profile", portable_profile]
-        )
-    arguments = [str(launcher), "--provider", target]
-    if target == "claude" and event_name == "SessionStart":
+        arguments = [_DESCRIPTOR_HOOK_COMMAND, "--provider", target, "--profile", portable_profile]
+    else:
+        arguments = [str(launcher), "--provider", target]
+        if compound_binding is not None:
+            arguments.extend(compound_binding["selector"])
+    if compound_binding is not None:
+        arguments.extend(["--compound-skill", compound_binding["skill"]])
+    if (
+        portable_profile is None
+        and target == "claude"
+        and event_name == "SessionStart"
+        and "--profile" in arguments
+        and environment is not None
+        and isinstance(environment.get("session_state_directory"), str)
+    ):
+        # Adding profile lookup must not move existing resumed-session pins.
+        arguments.extend(["--environment-state-directory", environment["session_state_directory"]])
+    if (
+        portable_profile is None
+        and target == "claude"
+        and event_name == "SessionStart"
+        and "--profile" not in arguments
+    ):
         arguments.extend(_claude_environment_arguments(environment))
     return _shell_command(arguments)
 
@@ -457,6 +484,183 @@ def _prepare_venv(venv: Path, uv: str, steps: list[Step]) -> tuple[Path, Path]:
     return python, launcher
 
 
+def _package_payload(package: Path, steps: list[Step]) -> dict[str, str]:
+    """Hash the reference distribution payload, never its version label alone."""
+    prefix = "agent_knowledge/"
+    payload: dict[str, str] = {}
+    try:
+        if package.is_dir():
+            root = package / "src" / "agent_knowledge"
+            if not root.is_dir():
+                raise ValueError("Missing source package")
+            for path in root.rglob("*"):
+                if "__pycache__" in path.parts or path.suffix == ".pyc":
+                    continue
+                if path.is_symlink():
+                    raise ValueError("Symlinked package payload")
+                if path.is_file():
+                    payload[prefix + path.relative_to(root).as_posix()] = hashlib.sha256(
+                        path.read_bytes()
+                    ).hexdigest()
+            # Keep the source-to-wheel projection aligned with pyproject.toml.
+            guide = package / "docs" / "agent-contract.md"
+            if guide.is_symlink():
+                raise ValueError("Symlinked guide")
+            payload[prefix + "resources/agent-contract.md"] = hashlib.sha256(
+                guide.read_bytes()
+            ).hexdigest()
+        elif package.suffix == ".whl":
+            with zipfile.ZipFile(package) as archive:
+                for member in archive.infolist():
+                    if not member.filename.startswith(prefix) or member.is_dir():
+                        continue
+                    path = Path(member.filename)
+                    if ".." in path.parts or "__pycache__" in path.parts or path.suffix == ".pyc":
+                        raise ValueError("Invalid wheel payload")
+                    if member.filename in payload:
+                        raise ValueError("Duplicate wheel payload")
+                    payload[member.filename] = hashlib.sha256(archive.read(member)).hexdigest()
+        else:
+            raise ValueError("Expected a source checkout or wheel")
+        if (
+            prefix + "__init__.py" not in payload
+            or prefix + "resources/agent-contract.md" not in payload
+        ):
+            raise ValueError("Incomplete runtime payload")
+    except (OSError, ValueError, zipfile.BadZipFile) as error:
+        raise SetupFailure(
+            "package-reference-invalid",
+            "--package must contain a readable source checkout or complete runtime wheel.",
+            steps,
+        ) from error
+    return payload
+
+
+_EXISTING_RUNTIME_PROBE = """
+import base64, hashlib, importlib.metadata, importlib.util, json, pathlib, shlex, subprocess, sys
+venv = pathlib.Path(sys.argv[1]).resolve()
+if pathlib.Path(sys.prefix).resolve() != venv or sys.prefix == sys.base_prefix:
+    raise ValueError('Interpreter is not in the selected virtual environment')
+dist = importlib.metadata.distribution('agent-knowledge-scaffold')
+spec = importlib.util.find_spec('agent_knowledge')
+root = pathlib.Path(spec.origin).parent
+if not root.resolve().is_relative_to(venv):
+    raise ValueError('Runtime is outside the selected virtual environment')
+payload = {}
+for path in root.rglob('*'):
+    if '__pycache__' in path.parts or path.suffix == '.pyc':
+        continue
+    if path.is_symlink():
+        raise ValueError('Symlinked runtime payload')
+    if path.is_file():
+        name = 'agent_knowledge/' + path.relative_to(root).as_posix()
+        payload[name] = hashlib.sha256(path.read_bytes()).hexdigest()
+expected = {
+    'agent-knowledge': 'agent_knowledge.entrypoints.cli.main:main',
+    'agent-knowledge-hook': 'agent_knowledge.entrypoints.hooks.runtime:main',
+}
+entries = {ep.name: ep.value for ep in dist.entry_points if ep.group == 'console_scripts'}
+if any(entries.get(name) != target for name, target in expected.items()):
+    raise ValueError('Runtime entry points do not match the package')
+for argument in sys.argv[2:]:
+    launcher = pathlib.Path(argument)
+    record = next((f for f in dist.files or () if f.locate().resolve() == launcher.resolve()), None)
+    if record is None or record.hash is None or record.hash.mode != 'sha256':
+        raise ValueError('Launcher has no installed distribution record')
+    digest = base64.urlsafe_b64encode(
+        hashlib.sha256(launcher.read_bytes()).digest()
+    ).rstrip(b'=').decode()
+    if digest != record.hash.value:
+        raise ValueError('Launcher differs from the installed distribution')
+    lines = launcher.read_text().splitlines()
+    if lines[0] == '#!/bin/sh' and len(lines) > 1 and lines[1].startswith("'''exec' "):
+        arguments = shlex.split(lines[1][len("'''exec' "):])
+        if len(arguments) != 3 or arguments[1:] != ['$0', '$@']:
+            raise ValueError('Unsupported launcher trampoline')
+        interpreter = arguments[0]
+    elif lines[0].startswith('#!'):
+        arguments = shlex.split(lines[0][2:])
+        if len(arguments) != 1:
+            raise ValueError('Launcher must select an explicit interpreter')
+        interpreter = arguments[0]
+    else:
+        raise ValueError('Launcher has no interpreter')
+    if not pathlib.Path(interpreter).is_absolute():
+        raise ValueError('Launcher interpreter is not absolute')
+    execution = subprocess.run(
+        [interpreter, '-I', '-B', '-c', 'import sys; print(sys.prefix)'],
+        capture_output=True, text=True, timeout=10, check=True,
+    )
+    if pathlib.Path(execution.stdout.strip()).resolve() != venv:
+        raise ValueError('Launcher executes a different virtual environment')
+print(json.dumps({'status': 'ok', 'payload': payload, 'version': dist.version}))
+"""
+
+
+def _verify_existing_runtime(
+    venv: Path, package: Path, steps: list[Step]
+) -> tuple[Path, Path, dict[str, object]]:
+    """Read an image-built runtime without provisioning or generating its files."""
+    path = _existing_directory(venv, "--venv")
+    python, launcher = _venv_executables(path)
+    hook = _venv_hook_executable(path)
+    if not (path / "pyvenv.cfg").is_file() or not python.is_file():
+        raise SetupFailure(
+            "invalid-venv", "Existing mode requires a complete virtual environment.", steps
+        )
+    _require_supported_python(python, steps, source="The existing virtual environment")
+    if any(not item.is_file() or not os.access(item, os.X_OK) for item in (launcher, hook)):
+        raise SetupFailure(
+            "launcher-missing", "Existing mode requires both executable installed launchers.", steps
+        )
+    expected = _package_payload(package, steps)
+    try:
+        actual = _json_result(
+            [
+                str(python),
+                "-I",
+                "-B",
+                "-c",
+                _EXISTING_RUNTIME_PROBE,
+                str(path),
+                str(launcher),
+                str(hook),
+            ],
+            cwd=path,
+            name="runtime-contents",
+            steps=steps,
+        )
+    except SetupFailure as error:
+        raise SetupFailure(
+            "runtime-contents-unverified",
+            "The existing interpreter, package or launcher records could not be verified.",
+            steps,
+            "Rebuild the image runtime from the selected package; "
+            "existing mode does not repair it.",
+        ) from error
+    if actual.get("payload") != expected:
+        raise SetupFailure(
+            "runtime-package-mismatch",
+            "The installed runtime contents differ from --package, regardless of version label.",
+            steps,
+            "Use the matching package reference or rebuild the runtime, then retry setup.",
+        )
+    steps.append(Step("venv", "verified-existing"))
+    return (
+        python,
+        launcher,
+        {
+            "mode": "existing",
+            "status": "verified",
+            "package": str(package),
+            "payload_sha256": hashlib.sha256(
+                json.dumps(expected, sort_keys=True).encode()
+            ).hexdigest(),
+            "version": actual.get("version"),
+        },
+    )
+
+
 def _run(
     command: list[str],
     *,
@@ -465,13 +669,17 @@ def _run(
     steps: list[Step],
     env: dict[str, str] | None = None,
     allow_nonzero: bool = False,
+    input_text: str | None = None,
 ) -> subprocess.CompletedProcess[str]:
     try:
+        child_env = dict(os.environ if env is None else env)
+        child_env["PYTHONDONTWRITEBYTECODE"] = "1"
         result = subprocess.run(
             command,
             cwd=cwd,
-            env=env,
-            stdin=subprocess.DEVNULL,
+            env=child_env,
+            stdin=subprocess.DEVNULL if input_text is None else None,
+            input=input_text,
             capture_output=True,
             text=True,
             timeout=_COMMAND_TIMEOUT,
@@ -547,6 +755,8 @@ def _json_result(
     steps: list[Step],
     allow_error: bool = False,
     allow_environment_pending: bool = False,
+    allow_read_ready: bool = False,
+    input_text: str | None = None,
 ) -> dict[str, Any]:
     result = _run(
         command,
@@ -554,6 +764,7 @@ def _json_result(
         name=name,
         steps=steps,
         allow_nonzero=allow_error,
+        input_text=input_text,
     )
     try:
         value = json.loads(result.stdout)
@@ -561,6 +772,14 @@ def _json_result(
         raise SetupFailure("invalid-output", f"{name} did not return JSON.", steps) from error
     if not isinstance(value, dict):
         raise SetupFailure("invalid-output", f"{name} did not return a JSON object.", steps)
+    if (
+        allow_read_ready
+        and result.returncode in (2, 3)
+        and value.get("status") == "error"
+        and isinstance(value.get("readiness"), dict)
+        and value["readiness"].get("read") == "ready"
+    ):
+        return value
     if (
         allow_environment_pending
         and result.returncode in (2, 3)
@@ -602,6 +821,7 @@ def _hook_package(consumer: Path, *, python: Path = Path(sys.executable)) -> tup
             [
                 str(python),
                 "-I",
+                "-B",
                 "-c",
                 "import json, pathlib, sys, yaml; "
                 "data = yaml.safe_load(pathlib.Path(sys.argv[1]).read_text(encoding='utf-8')); "
@@ -740,6 +960,114 @@ def _active_hook_path(consumer: Path, target: str) -> Path:
     return consumer / ".github" / "hooks" / "knowledge-agent-pack-knowledge-discovery.json"
 
 
+def _guard_managed_targets(consumer: Path, targets: tuple[str, ...]) -> None:
+    """Refuse a potentially pruning install before changing an existing consumer."""
+    instruction_paths = {
+        "codex": consumer / "AGENTS.md",
+        "claude": consumer / "CLAUDE.md",
+        "copilot": consumer / ".github/copilot-instructions.md",
+    }
+    skill_paths = {
+        "codex": consumer / ".agents/skills",
+        "claude": consumer / ".claude/skills",
+        "copilot": consumer / ".github/skills",
+    }
+    recorded: set[str] = set()
+    lock = consumer / "apm.lock.yaml"
+    if lock.exists():
+        try:
+            lines = lock.read_text(encoding="utf-8").splitlines()
+        except (OSError, UnicodeError) as error:
+            raise SetupFailure("apm-targets-unverified", "Cannot inspect existing APM targets.",
+                               [], remediation="Use the repository-owned prepare/install/bind flow.") from error
+        # APM's generated block layout can be inspected before a Python/YAML
+        # runtime exists. Unknown layouts fail closed into the owned workflow.
+        blocks = _deployment_blocks(lines)
+        if any(line.startswith("deployments:") for line in lines):
+            declared = [_first_lock_scalar(block, "target") for block in blocks]
+            if any(target not in _TARGET_ORDER for target in declared) or (
+                not blocks and "deployments: []" not in lines
+            ):
+                raise SetupFailure("apm-targets-unverified", "Cannot establish the APM target set.",
+                                   [], remediation="Use the repository-owned prepare/install/bind flow.")
+            recorded.update(target for target in declared if target is not None)
+        for target, path in skill_paths.items():
+            relative = path.relative_to(consumer).as_posix() + "/"
+            if any(relative in line for line in lines):
+                recorded.add(target)
+    omitted = [
+        target for target in _TARGET_ORDER
+        if target not in targets
+        and (target in recorded or _active_hook_path(consumer, target).exists()
+             or instruction_paths[target].exists() or skill_paths[target].exists())
+    ]
+    if omitted:
+        raise SetupFailure(
+            "apm-targets-would-narrow",
+            "Existing harness projections would be omitted: " + ", ".join(omitted) + ".",
+            [],
+            remediation="Preserve the existing target set, or use prepare then the "
+            "repository-owned installation/compilation before bind and final checks.",
+        )
+
+
+def _launch_report(
+    context: dict[str, Any],
+    environment: dict[str, object],
+    *,
+    launcher: Path,
+    selector: list[str],
+    venv: Path,
+    consumer: Path,
+    targets: tuple[str, ...],
+    hooks_ready: bool,
+) -> dict[str, object]:
+    """Supply value-free launch recipes; native acceptance remains a separate step."""
+    raw = context.get("environment")
+    declaration = None if raw is None else {
+        "file": raw["file"],
+        "variables": [
+            {"from_env": item["from_env"], "expose_as": item["expose_as"]}
+            for item in raw["variables"]
+        ],
+    }
+    providers: dict[str, object] = {}
+    activations = environment.get("providers", {})
+    for target in _TARGET_ORDER:
+        activation = activations.get(target, {}) if isinstance(activations, dict) else {}
+        state = activation.get("status") if isinstance(activation, dict) else None
+        ready = hooks_ready and target in targets and state in {
+            "cli-launch", "native-session-start", "not-configured"
+        }
+        command = activation.get("command") if isinstance(activation, dict) else None
+        providers[target] = {
+            "status": "ready" if ready else "pending",
+            "argv": shlex.split(command) if ready and isinstance(command, str)
+            else [target] if ready else None,
+        }
+    selection = context.get("selection", {})
+    registry = selection.get("settings_path") if isinstance(selection, dict) else None
+    return {
+        "schema": "knowledge-launch-recipe.v1",
+        "cwd": str(consumer),
+        "path_prepend": str(venv / "bin"),
+        "settings": registry,
+        "environment_declaration": declaration,
+        "selection": selection,
+        "preflight": {
+            "argv": [str(launcher), *selector, "preflight", "--request-file", "-"],
+            "request": {
+                "mode": "read", "consumer": str(consumer),
+                "expected_venv": str(venv),
+                "expected_workspace_id": context.get("workspace_id"),
+            },
+        },
+        "providers": providers,
+        "verification": "Run launch_container.py with the saved setup report; "
+        "native trust, hook firing and tool-sandbox writes require actual-session acceptance.",
+    }
+
+
 def _normalize_active_hook(
     path: Path, target: str, launcher: Path, event_name: str, command: str
 ) -> None:
@@ -825,6 +1153,7 @@ def _configure_copilot_hooks(
     environment: dict[str, object] | None,
     *,
     portable_profile: str | None = None,
+    compound_binding: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     """Replace APM's compatibility projection with Copilot's native schema."""
     document = _read_hook_document(path, "Copilot")
@@ -843,7 +1172,12 @@ def _configure_copilot_hooks(
         )
     commands = {
         event_name: _provider_hook_command(
-            launcher, "copilot", event_name, environment, portable_profile=portable_profile
+            launcher,
+            "copilot",
+            event_name,
+            environment,
+            portable_profile=portable_profile,
+            compound_binding=compound_binding,
         )
         for event_name in _COPILOT_EVENTS
     }
@@ -898,6 +1232,7 @@ def _configure_hook_registrations(
     environment: dict[str, object] | None = None,
     python: Path = Path(sys.executable),
     portable_profile: str | None = None,
+    compound_binding: dict[str, Any] | None = None,
 ) -> dict[str, object]:
     """Replace the descriptor marker with the installed venv hook launcher."""
     if not targets:
@@ -915,7 +1250,12 @@ def _configure_hook_registrations(
             document = _read_hook_document(path, target)
             for event_name in _LIFECYCLE_EVENTS:
                 command = _provider_hook_command(
-                    launcher, target, event_name, environment, portable_profile=portable_profile
+                    launcher,
+                    target,
+                    event_name,
+                    environment,
+                    portable_profile=portable_profile,
+                    compound_binding=compound_binding,
                 )
                 owned = _owned_hook_groups(
                     document,
@@ -944,7 +1284,12 @@ def _configure_hook_registrations(
                     _write_hook_document(path, document)
             for event_name in _LIFECYCLE_EVENTS:
                 command = _provider_hook_command(
-                    launcher, target, event_name, environment, portable_profile=portable_profile
+                    launcher,
+                    target,
+                    event_name,
+                    environment,
+                    portable_profile=portable_profile,
+                    compound_binding=compound_binding,
                 )
                 _normalize_active_hook(
                     _active_hook_path(consumer, target),
@@ -962,7 +1307,13 @@ def _configure_hook_registrations(
                 "APM did not write the Copilot hook registration.",
                 [],
             )
-        _configure_copilot_hooks(path, launcher, environment, portable_profile=portable_profile)
+        _configure_copilot_hooks(
+            path,
+            launcher,
+            environment,
+            portable_profile=portable_profile,
+            compound_binding=compound_binding,
+        )
     return _verify_hook_registrations(
         consumer,
         targets,
@@ -970,6 +1321,7 @@ def _configure_hook_registrations(
         environment=environment,
         python=python,
         portable_profile=portable_profile,
+        compound_binding=compound_binding,
     )
 
 
@@ -1119,6 +1471,7 @@ def _verify_hook_registrations(
     environment: dict[str, object] | None = None,
     python: Path = Path(sys.executable),
     portable_profile: str | None = None,
+    compound_binding: dict[str, Any] | None = None,
 ) -> dict[str, object]:
     """Verify one APM-owned registration exists for every requested target."""
     if not targets:
@@ -1138,7 +1491,12 @@ def _verify_hook_registrations(
             commands: dict[str, str] = {}
             for event_name in _LIFECYCLE_EVENTS:
                 command = _provider_hook_command(
-                    launcher, target, event_name, environment, portable_profile=portable_profile
+                    launcher,
+                    target,
+                    event_name,
+                    environment,
+                    portable_profile=portable_profile,
+                    compound_binding=compound_binding,
                 )
                 commands[event_name] = command
                 owned = _owned_hook_groups(
@@ -1205,7 +1563,12 @@ def _verify_hook_registrations(
                     [],
                 )
             command = _provider_hook_command(
-                launcher, "copilot", event_name, environment, portable_profile=portable_profile
+                launcher,
+                "copilot",
+                event_name,
+                environment,
+                portable_profile=portable_profile,
+                compound_binding=compound_binding,
             )
             commands[event_name] = command
             entry = entries[0]
@@ -1250,8 +1613,11 @@ def _environment_launcher(
     targets: tuple[str, ...] = _TARGET_ORDER,
     environment_readiness: str | None = None,
     portable_profile: str | None = None,
+    allow_runtime_writes: bool = True,
 ) -> dict[str, object]:
     """Create one content-addressed provider launcher containing no values."""
+    state_key = hashlib.sha256(str(consumer.resolve(strict=True)).encode("utf-8")).hexdigest()[:24]
+    state_directory = Path.home() / ".cache" / "agent-knowledge" / "claude-environments" / state_key
     raw = context.get("environment")
     if environment_readiness == "not-ready":
         if not isinstance(raw, dict) or raw.get("status") not in {"ready", "not-ready"}:
@@ -1264,6 +1630,7 @@ def _environment_launcher(
             "status": "not-ready",
             "session_policy": "one-profile-per-session",
             "environment_file": raw.get("file"),
+            "session_state_directory": str(state_directory),
             "launcher": None,
             "providers": {
                 target: {"status": "pending" if target in targets else "not-bound"}
@@ -1275,6 +1642,7 @@ def _environment_launcher(
     if raw is None:
         return {
             "status": "not-configured",
+            "session_state_directory": str(state_directory),
             "session_policy": "one-profile-per-session",
             "launcher": None,
             "providers": _provider_activation(None, targets),
@@ -1354,6 +1722,23 @@ def _environment_launcher(
         )
     if portable_profile is not None:
         return _portable_environment_report(portable_profile, targets, file_value, safe_variables)
+    if not allow_runtime_writes:
+        if targets:
+            raise SetupFailure(
+                "existing-runtime-portable-required",
+                "Existing runtime mode requires --portable-hooks to bind profile credentials.",
+                steps,
+                "Use an explicit --profile with portable hooks; "
+                "no launcher will be written into the venv.",
+            )
+        return {
+            "status": "ready",
+            "session_policy": "one-profile-per-session",
+            "environment_file": file_value,
+            "variables": safe_variables,
+            "launcher": None,
+            "providers": {target: {"status": "not-bound"} for target in _TARGET_ORDER},
+        }
     declaration = {
         "file": file_value,
         "variables": safe_variables,
@@ -1363,8 +1748,6 @@ def _environment_launcher(
         json.dumps(declaration, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()[:24]
     directory = venv / "agent-knowledge-environments"
-    state_key = hashlib.sha256(str(consumer.resolve(strict=True)).encode("utf-8")).hexdigest()[:24]
-    state_directory = Path.home() / ".cache" / "agent-knowledge" / "claude-environments" / state_key
     try:
         directory.mkdir(mode=0o700, parents=True, exist_ok=True)
         directory.chmod(0o700)
@@ -1587,6 +1970,131 @@ def _portable_environment_report(
     }
 
 
+def _compound_skill_payload(directory: Path) -> dict[str, str]:
+    """Compare the complete skill tree without trusting generated manifests."""
+    if directory.is_symlink() or not (directory / "SKILL.md").is_file():
+        raise ValueError("Missing skill directory")
+    payload = {}
+    for path in directory.rglob("*"):
+        if "__pycache__" in path.parts or path.suffix == ".pyc":
+            continue
+        if path.is_symlink():
+            raise ValueError("Symlinked skill resource")
+        if path.is_file():
+            payload[path.relative_to(directory).as_posix()] = hashlib.sha256(
+                path.read_bytes()
+            ).hexdigest()
+    return payload
+
+
+def _prepare_compounding(
+    context: dict[str, Any],
+    launcher: Path,
+    selector: list[str],
+    consumer: Path,
+    installed_package: Path,
+    steps: list[Step],
+    *,
+    portable: bool,
+) -> tuple[dict[str, object], dict[str, Any] | None]:
+    """Verify compounding separately; activation follows the consumer's checks."""
+    setup = context.get("setup")
+    trigger = setup.get("compounding") if isinstance(setup, dict) else None
+    if trigger is None:
+        return {"status": "not-configured"}, None
+    source = Path(__file__).resolve().parents[2] / "knowledge-compound"
+    installed = installed_package / ".apm" / "skills" / "knowledge-compound"
+    try:
+        reference = _compound_skill_payload(source)
+    except (OSError, ValueError):
+        return {
+            "status": "pending",
+            "reason": "compound-skill-reference-unavailable",
+            "detail": "Run the helper from its complete package with the sibling compound skill.",
+        }, None
+    try:
+        if not installed.resolve().is_relative_to(installed_package.resolve()):
+            raise ValueError("Skill outside installed package")
+        actual = _compound_skill_payload(installed)
+    except (OSError, ValueError):
+        return {
+            "status": "pending",
+            "reason": "compound-skill-missing",
+            "detail": "Reinstall the complete matching APM package and its compound resources.",
+        }, None
+    if actual != reference:
+        return {
+            "status": "pending",
+            "reason": "compound-skill-mismatch",
+            "detail": "Installed compound skill/resources differ from this helper's package.",
+        }, None
+    try:
+        doctor = _json_result(
+            [str(launcher), *selector, "doctor", "--request-file", "-"],
+            cwd=consumer,
+            name="compound-write-readiness",
+            steps=steps,
+            allow_error=True,
+            allow_read_ready=True,
+            input_text=json.dumps({"mode": "write"}),
+        )
+        readiness = doctor.get("readiness")
+        if not isinstance(readiness, dict) or any(
+            readiness.get(name) != "ready" for name in ("read", "write", "receipts")
+        ):
+            return {
+                "status": "pending",
+                "reason": "compound-write-not-ready",
+                "readiness": readiness,
+                "diagnostics": doctor.get("diagnostics", []),
+            }, None
+        agreement = _json_result(
+            [str(launcher), *selector, "compound", "--request-file", "-"],
+            cwd=consumer,
+            name="compound-status",
+            steps=steps,
+            allow_error=True,
+            input_text=json.dumps({"action": "status"}),
+        )
+    except SetupFailure as error:
+        return {
+            "status": "error",
+            "reason": error.code,
+            "detail": str(error),
+            "remediation": error.remediation,
+        }, None
+    existing = agreement.get("trigger")
+    details = {
+        "trigger": existing,
+        "activity_path": agreement.get("activity_path"),
+        "active": agreement.get("active"),
+        "active_runs": agreement.get("active_runs", []),
+    }
+    if existing is not None and existing != trigger:
+        return {"status": "error", "reason": "trigger-conflict", **details}, None
+    if existing is None and agreement.get("active"):
+        return {"status": "pending", "reason": "active-run-recovery-required", **details}, None
+    skill = installed / "SKILL.md"
+    binding = {
+        "selector": selector,
+        "skill": skill.relative_to(consumer).as_posix() if portable else str(skill.resolve()),
+    }
+    report = {"status": "ready", **details, "skill": binding["skill"]}
+    if existing is None:
+        report.update(
+            status="pending",
+            reason="activation-required",
+            activation={
+                "command": _shell_command(
+                    [str(launcher), *selector, "compound", "--request-file", "-"]
+                ),
+                "request": {"action": "configure-trigger"},
+                "after": "consumer-checks",
+            },
+        )
+    return report, binding
+
+
 def run_setup(
     *,
     workspace: Path,
@@ -1598,8 +2106,11 @@ def run_setup(
     settings: Path | None = None,
     apm_mode: str = "managed",
     portable_hooks: bool = False,
+    runtime_mode: str = "install",
 ) -> dict[str, Any]:
     steps: list[Step] = []
+    if runtime_mode not in {"install", "existing"}:
+        raise SetupFailure("unsupported-runtime-mode", "Choose install or existing.", steps)
     if apm_mode not in {"managed", "prepare", "bind"}:
         raise SetupFailure("unsupported-apm-mode", "Choose managed, prepare or bind.", steps)
     if portable_hooks and profile is None:
@@ -1620,20 +2131,26 @@ def run_setup(
         raise SetupFailure("missing-path", "--package does not exist.", steps)
     consumer_path = _existing_directory(consumer, "--consumer")
     targets = _targets(target_text)
-    uv = shutil.which("uv")
-    if uv is None:
-        raise SetupFailure("uv-unavailable", "Install uv and retry setup.", steps)
+    if apm_mode == "managed":
+        _guard_managed_targets(consumer_path, targets)
     apm = shutil.which("apm") if targets and apm_mode == "managed" else None
     if targets and apm_mode == "managed" and apm is None:
         raise SetupFailure("apm-unavailable", "Install the APM CLI and retry setup.", steps)
 
-    python, launcher = _prepare_venv(venv_path, uv, steps)
-    _run(
-        [uv, "pip", "install", "--python", str(python), str(package_path)],
-        cwd=consumer_path,
-        name="runtime-install",
-        steps=steps,
-    )
+    if runtime_mode == "existing":
+        python, launcher, runtime_report = _verify_existing_runtime(venv_path, package_path, steps)
+    else:
+        uv = shutil.which("uv")
+        if uv is None:
+            raise SetupFailure("uv-unavailable", "Install uv and retry setup.", steps)
+        python, launcher = _prepare_venv(venv_path, uv, steps)
+        _run(
+            [uv, "pip", "install", "--python", str(python), str(package_path)],
+            cwd=consumer_path,
+            name="runtime-install",
+            steps=steps,
+        )
+        runtime_report = {"mode": "install", "status": "installed", "package": str(package_path)}
     _, launcher = _venv_executables(_absolute(venv_path, "--venv"))
     if not launcher.is_file():
         raise SetupFailure(
@@ -1671,6 +2188,7 @@ def run_setup(
         steps=steps,
         allow_error=True,
         allow_environment_pending=True,
+        allow_read_ready=True,
     )
     readiness = doctor.get("readiness")
     if not isinstance(readiness, dict) or readiness.get("read") != "ready":
@@ -1689,9 +2207,17 @@ def run_setup(
         targets=() if apm_mode == "prepare" else targets,
         environment_readiness=readiness.get("environment"),
         portable_profile=profile if portable_hooks and apm_mode != "prepare" else None,
+        allow_runtime_writes=runtime_mode != "existing",
     )
     hook_report: dict[str, object] = {"status": "disabled", "targets": []}
     lock_report: dict[str, str] = {"status": "disabled"}
+    selected_setup = context.get("setup")
+    selected_trigger = (
+        selected_setup.get("compounding") if isinstance(selected_setup, dict) else None
+    )
+    compound_report: dict[str, object] = {
+        "status": "pending" if selected_trigger is not None else "not-configured"
+    }
     if targets and apm_mode == "prepare":
         hook_report = {"status": "pending", "targets": list(targets)}
     elif targets:
@@ -1705,6 +2231,15 @@ def run_setup(
                 steps=steps,
             )
         _, installed_package = _hook_package(consumer_path, python=python)
+        compound_report, compound_binding = _prepare_compounding(
+            context,
+            launcher,
+            selector,
+            consumer_path,
+            installed_package,
+            steps,
+            portable=portable_hooks,
+        )
         _bind_package_hook(installed_package, hook_launcher, portable=portable_hooks)
         if apm_mode == "managed":
             assert apm is not None
@@ -1721,6 +2256,7 @@ def run_setup(
             environment=environment_report,
             python=python,
             portable_profile=profile if portable_hooks else None,
+            compound_binding=compound_binding,
         )
         if "copilot" in targets:
             registrations = hook_report.get("registrations")
@@ -1746,6 +2282,7 @@ def run_setup(
         "selection": context.get("selection"),
         "configuration": context.get("configuration"),
         "venv": str(_absolute(venv_path, "--venv")),
+        "runtime": runtime_report,
         "launcher": str(launcher),
         "hook_launcher": str(hook_launcher),
         "consumer": str(consumer_path),
@@ -1770,8 +2307,22 @@ def run_setup(
             "command": _shell_command([str(launcher), *selector, "doctor"]),
         },
         "environment": environment_report,
+        "launch": _launch_report(
+            context, environment_report, launcher=launcher, selector=selector,
+            venv=_absolute(venv_path, "--venv"), consumer=consumer_path,
+            targets=targets, hooks_ready=hook_report["status"] == "ready",
+        ),
+        "compounding": compound_report,
         "steps": [asdict(step) for step in steps],
-        "automation_registration": "native-harness",
+        "automation_registration": {
+            "prompt": "prompt-hook",
+            "local-schedule": "native-harness",
+            "disabled": "disabled",
+            "manual": "manual",
+        }.get(
+            selected_trigger.get("mode") if isinstance(selected_trigger, dict) else None,
+            "native-harness",
+        ),
         "hooks": hook_report,
         "apm_lock": lock_report,
     }
@@ -1790,6 +2341,7 @@ def main(argv: list[str] | None = None) -> int:
             settings=args.settings,
             apm_mode=args.apm_mode,
             portable_hooks=args.portable_hooks,
+            runtime_mode=args.runtime_mode,
         )
     except SetupFailure as error:
         diagnostic = {"code": error.code, "message": str(error)}

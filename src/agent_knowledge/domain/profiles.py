@@ -314,8 +314,9 @@ _GROUPS = {
     (): {"applicable_scopes", "sources", "signal_storage", "receipts", "setup"},
     ("signal_storage",): {"scaffold_root", "code_root"},
     ("receipts",): {"enabled", "directory", "retention_days"},
-    ("setup",): {"venv", "harnesses", "automation"},
+    ("setup",): {"venv", "harnesses", "automation", "compounding"},
     ("setup", "automation"): {"name", "cadence", "timezone"},
+    ("setup", "compounding"): {"mode", "owner", "interval_seconds", "retry_seconds"},
 }
 
 

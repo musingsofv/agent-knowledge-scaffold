@@ -16,17 +16,23 @@ Inspect applicable `AGENTS.md` or other harness instructions, `apm.yml`, the
 registered architecture/layout, package scripts, APM version pin and generation
 checks. Identify the consumer's selected targets and existing local skills,
 external dependencies, generated outputs, lock ownership and staging checks.
+Preserve the complete existing target set during installation. A narrow target
+argument can prune other native projections in some APM versions; verify actual
+outputs after the final install/compile. Helper-managed setup rejects omitted
+existing projections instead of silently narrowing them. Existing repository
+commands remain authoritative; use staged integration to preserve their policy.
 Do not infer that a repository with an empty dependency list forbids all future
 packages: adding this package may require an explicit, narrow contract update.
 Use existing setup authorization; ask only about unresolved material policy or
 business choices.
 
 Keep the authored package and runtime distribution aligned. The `--package`
-argument installs Python from a checkout or wheel; it does not register the APM
+argument supplies Python from a checkout or wheel in install mode, or
+verifies an existing runtime against it in `--runtime-mode existing`; it does not register the APM
 package in the consumer. Use the package's authored sources as the integration
 inputs rather than copying hook logic or maintaining a second discovery policy.
 For a shared manifest, prefer a portable reference such as
-`musingsofv/agent-knowledge-scaffold/packages/knowledge-agent-pack#main` or the
+`example/agent-knowledge-scaffold/packages/knowledge-agent-pack#main` or the
 organization's approved mirror/tag/commit. A local source path is also supported
 for development. Do not switch a remote dependency to an absolute local path
 as a binding workaround.
@@ -45,6 +51,11 @@ python3 /work/agent-knowledge-scaffold/packages/knowledge-agent-pack/.apm/skills
   --consumer /work/orders-api \
   --targets codex --apm-mode prepare
 ```
+
+For a provisioned runtime, add `--runtime-mode existing`; this verifies the
+read-only package input and both installed launchers without uv or venv writes.
+Use [portable binding](portable-hooks.md) for immutable image-built venvs and
+[container setup](containers.md) for the separate image/post-mount lifecycle.
 
 `prepare` requires neither an APM executable nor an installed APM package. It
 installs/verifies the Python runtime and reports requested hooks pending. It
@@ -111,8 +122,12 @@ python3 /work/agent-knowledge-scaffold/packages/knowledge-agent-pack/.apm/skills
 reuses the same package-owned binding and verification as managed setup. It
 updates the installed hook descriptor and selected provider hook projections;
 for Copilot it also reconciles the owned deployed-file hashes in `apm.lock.yaml`.
-It is not an immutable-consumer check. Missing or conflicting package resources
-fail rather than creating a private replacement hook. Run the repository's
+It is not an immutable-consumer check. A missing or conflicting base hook
+bundle fails rather than creating a private replacement hook. Optional
+compounding resources have separate readiness: the installed compound skill
+and its references must match the APM package owning the helper. A stale or
+missing worker resource, unsafe write readiness or trigger conflict leaves
+compounding pending while valid discovery/reflection bindings remain usable. Run the repository's
 checks **after binding**, accounting for the selected runtime command
 in owned outputs. For a shared host/container checkout or committable hook files,
 use [portable binding](portable-hooks.md) instead of an absolute command. When staging is enforced, validate the actual index contents
@@ -122,6 +137,16 @@ and registry recommendation, with the user's session override intact. Resolve
 that selector through `context` and `doctor`. Binding verifies hooks, not this
 agent-authored instruction content; report it separately and leave incomplete
 composition pending.
+
+The helper never implicitly runs `configure-trigger`. An otherwise ready
+fallback with no recorded agreement returns a pending activation command and
+request. After the final consumer checks above pass, execute that exact command
+as part of this setup and verify the recorded agreement; no further approval
+is needed for the already authorized integration. Compatible hooks can be bound
+before activation and remain quiet meanwhile. A matching existing agreement is
+preserved, so repeat binding does not create a new owner or reset run history.
+If resources or readiness were pending, resolve them through the owning
+workflow, rebind and rerun affected checks before activation.
 
 Report runtime/read, environment, hooks, write/receipt and automation readiness
 individually. With a read-ready workspace and only environment diagnostics,
@@ -136,4 +161,7 @@ portable markers that need rebinding. Remove the package through the same
 repository-owned dependency workflow, preserving other skills and hooks.
 After the developer fills the private env file, rerun the same selected bind
 command and repository checks. Only then present the returned activation action
-for a new harness session. Scheduling remains the setup skill's separate step.
+for a new harness session. Trigger selection remains the setup skill's separate step. Follow
+[local compounding](local-compounding.md) after final checks; bind alone does not
+record a new agreement or register a native schedule. Preserve one shared-store owner,
+including when consumer installation resets and later rebinds the hooks.

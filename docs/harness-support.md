@@ -34,14 +34,15 @@ APM projection alone is not a completed binding.
 | Named knowledge profiles and overrides | **Live proven.** Selection, default changes, resume and direct-config isolation were exercised. | **Live proven.** Explicit selection survived a default change, with isolated receipts and signals. | **Live proven.** Explicit selection survived a default change, with isolated receipts and signals. |
 | External profile environment in the local CLI | **Live proven.** `SessionStart` writes declared mappings through Claude's private environment channel. | **Live proven.** The setup-generated launcher starts Codex with the selected declared mappings. | **Live proven.** The setup-generated launcher supplies declared mappings to Bash tools and enables native redaction. |
 | Session-start discovery reminder | **Live proven.** Native `SessionStart` context reached the model. | **Live proven.** A startup-only probe returned the exact hook-supplied thread handle. | **Live proven.** A startup-only probe returned the exact session handle supplied through `additionalContext`. |
-| Resume or compaction rediscovery | **Live proven for resume; installed proof for other mapped lifecycle sources.** | **Installed proof.** Resume, clear and compact sources map to the rediscovery reminder. | **Provider limited.** Native `sessionStart(source=resume)` supplies the resume reminder. Copilot exposes `preCompact` only as notification and has no model-visible event after in-session compaction. Always-on discovery instructions remain, and the next user prompt receives the reflection reminder only. |
+| Resume or compaction rediscovery | **Live proven for resume; installed proof for other mapped lifecycle sources.** | **Installed proof.** Resume, clear and compact sources map to the rediscovery reminder. | **Provider limited.** Native `sessionStart(source=resume)` supplies the resume reminder. Copilot exposes `preCompact` only as notification and has no model-visible event after in-session compaction. Always-on discovery instructions remain, and the next user prompt receives reflection plus conditional compounding context when enabled and due. |
 | Per-prompt reflection reminder | **Live proven.** `UserPromptSubmit` context reached the model with the session handle. | **Live proven.** A prompt-only probe returned the exact hook-supplied thread handle. | **Live proven.** Copilot 1.0.86 `userPromptTransformed` appended the reminder and exact session ID in both initial and resumed prompt-mode turns. |
 | Exact provider and session provenance in reminder context | **Live session plus installed provider proof.** Claude copied the hook-supplied session ID into a signal; provider rendering is covered by the installed three-provider hook proof. | **Live proven.** Startup and prompt-only probes returned the normalized provider and actual Codex thread ID. | **Live proven.** The model copied `copilot` and the exact hook-supplied session ID into a signal and reused the session after resume. |
 | `signal record` and session-filtered `signal list` | **Live proven.** Claude recorded, rediscovered and deduplicated a session-scoped observation. | **Live proven.** Codex recorded one session-scoped signal, rediscovered its body after resume and suppressed a duplicate. | **Live proven.** Copilot recorded one session-scoped signal, rediscovered its body after resume and suppressed a duplicate. |
 | Retrieval receipts and `usage export` | **Live proven.** The final-pass flow generated and exported retrieval evidence. | **Live proven plus installed export proof.** Catalog/search/inspect receipts retained the exact profile and session; retention/export remain integration-tested. | **Live proven plus installed export proof.** Catalog/search/inspect receipts retained the exact profile and session, including a corrected invalid request; retention/export remain integration-tested. |
 | Agent-led `knowledge-compound` | **Live proven.** A real one-shot agent followed the installed skill and completed guarded start, drain and finish. | **Live proven.** A real one-shot agent followed the installed skill and completed guarded start, drain and finish. | **Live proven.** A real one-shot agent followed the installed skill and completed guarded start, drain and finish. |
 | Compound snapshots, archives and activity provenance | **Live proven plus installed guards.** | **Live proven plus installed guards.** | **Live proven plus installed guards.** |
-| Native recurring compounding | **Provider limited.** Setup explains Claude's available recurring-task command, but registration and scheduled execution are not live-tested. | **Live proven.** A Codex desktop Scheduled task loaded the installed compound skill, processed one seeded signal, archived/drained it once with full provenance, and was then removed. Registration was performed through the Codex Scheduled surface rather than the repository helper. | **Provider limited.** CLI `/every` and `/after` are session-scoped, run only while that interactive session is open, and are not unattended daily automation. A live free-tier `/after` attempt reached the feature but failed schedule parsing because the routed model was unsupported. Use an authorized external scheduler invoking `copilot -p` or a cloud automation for durable work. |
+| Durable native local compounding | **Provider limited.** Session-only `/loop` or `/every` does not establish durable recurrence. Use prompt fallback unless the actual local surface supplies a verified durable schedule. | **Desktop live proven; CLI provider limited.** A desktop Scheduled task completed one disposable run and was removed. Codex CLI alone does not inherit that scheduler; use prompt fallback there. | **Provider limited.** `/every` and `/after` belong to the open session; they are not unattended daily automation. Use prompt fallback when no durable native local surface is verified. |
+| Prompt-triggered compounding | **Live proven.** Claude Code 2.1.236 delegated a native worker, retained exact run/worker identity and suppressed a second run on resume. | **Live proven.** Codex CLI 0.160.1 native parent/child evidence proves selected execution and a quiet repeat; the encrypted handoff body itself is not observable. | **Live proven.** Copilot CLI 1.0.86 delegated a native worker, received its exact ID and route through the child hook, completed the selected run and stayed quiet on repeat. See [local compounding proof](local-compounding-proof.md). |
 | Remote publication of compounded knowledge | **Provider limited.** Local decisions and guarded drainage are proven; a real remote PR publication is not. | **Provider limited.** Local decisions and guarded drainage are proven; a real remote PR publication is not. | **Provider limited.** Local decisions and guarded drainage are proven; a real remote PR publication is not. |
 
 ## App and cloud boundaries
@@ -55,18 +56,48 @@ process, hook, filesystem or credential surfaces.
 | Claude Desktop | No separate desktop support claim is made. The proven target is Claude Code. |
 | Codex desktop app | Instructions, skills and the CLI remain usable in a local project. There is no documented generic per-task arbitrary env-file injection, so use provider-native credentials or the explicit setup-reported CLI launcher. Desktop Scheduled registration and one real compounded run are live-proven. |
 | Copilot app | Repository instructions are supported, but generic per-task env-file injection and the local CLI's Bash activation bridge are unavailable. Use the app's selected GitHub identity and provider-native credential surfaces. |
-| Copilot cloud agent and cloud automations | Use repository or organization Agents secrets and variables. The local env-file launcher does not configure a cloud agent, and this repository has not live-tested cloud execution. |
+| Copilot cloud agent | Outside this local setup target. The local launcher and hook binding do not configure that execution environment; no cloud execution proof is claimed. |
+
+## Existing containers
+
+Container setup and checked launches have their own [proof report](container-launch-proof.md).
+Host-native results above do not establish authenticated in-container operation.
+The report separates runtime/filesystem fixtures, native launcher acceptance,
+credential activation, hooks and outstanding sandbox/Windows-host coverage.
 
 ## Setup readiness boundaries
 
 Runtime/read, signal/receipt writes, hooks, profile credentials and automation
-are reported separately. If knowledge reads are ready and only profile
+are reported separately. Hook registration, project trust, approval of the exact
+hook definition and observed lifecycle/prompt delivery are separate facts.
+In Codex CLI 0.160.1, an enabled project hook can remain untrusted after successful
+binding and project approval. Complete native `/hooks` review for the current
+package definitions, then verify delivery in a fresh session. Changed definitions
+need review again. Follow the setup skill's
+[provider trust procedure](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/portable-hooks.md#provider-trust-and-delivery);
+this version-specific prerequisite does not invalidate historical live proof or
+establish the same trust mechanism for other providers/releases.
+
+If knowledge reads are ready and only profile
 environment diagnostics remain, setup can bind discovery/reflection hooks with
 credentials pending. Doctor still reports those diagnostics and fails overall;
 setup does not offer a credential loader command. `prepare` intentionally leaves
 requested hooks pending. Populate the private env file, rerun `managed` or
 `bind` for the same profile and perform repository checks before using the
 reported new-session activation. The parser is unchanged and remains strict.
+
+Compounding readiness also records the selected trigger mode and one logical
+owner per shared store. Prefer a verified durable native local schedule;
+otherwise use prompt fallback. A default rolling 24-hour completion interval
+is not a calendar schedule. Session-only timers do not satisfy durable schedule
+readiness. Setup verifies compound skill/reference parity and write readiness,
+then binds valid hooks without implicitly recording a new trigger agreement.
+When activation is pending, execute its returned command after final consumer
+checks; a matching agreement remains active across rebind. Stale/missing compound
+resources and trigger conflicts remain separately pending while valid base
+reminders still bind. Configure/reconcile through the existing activity log; preserve
+manual/disabled choices and existing working schedules. See
+[local compounding setup](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/local-compounding.md).
 
 The staged/pending-credential extension has its own deterministic acceptance
 coverage described in [R8 proof](r8-harness-proof.md#staged-setup-and-pending-credentials).
@@ -84,8 +115,20 @@ hosted by Docker on Windows execute Linux code; native Windows Python is a
 separate, unsupported execution environment. A mounted host directory still
 needs filesystem checks on that actual mount. Cross-platform command generation
 does not certify filesystem semantics or native Windows support.
+The [container reference](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/containers.md)
+separates image provisioning from post-mount `--runtime-mode existing` checks,
+using portable hooks and persistent state without writing an immutable venv.
 
 ## Known limitations
+
+Container setup distinguishes execution observations, selected-runtime/PATH
+checks, private-file preparation, native activation, hook registration/trust and
+actual tool-sandbox writes. The installed `preflight` reports only what its own
+process can establish; native firing and outer-harness permissions remain
+unverified until tested through the consumer's real launcher. Linux runtime
+fixtures do not prove provider support on every image or Windows-host mounts.
+The [container guide](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/containers.md)
+owns the acceptance and change-invalidation procedure.
 
 - The agent chooses queries, relevance, file ranges, graph expansion, signal
   usefulness and compounding owners. The deterministic tool validates and
@@ -101,19 +144,24 @@ does not certify filesystem semantics or native Windows support.
   for the target profile and a new session.
 - Profile mappings are convenience routing, not an access-control boundary.
   Provider keychains and credential helpers remain active.
-- Hooks are advisory and fail open. They remind the model to use the CLI but do
-  not perform retrieval, judge signals or block edits.
-- Codex project hooks remain subject to Codex's project-trust boundary. Setup
-  can install the hook but cannot silently grant that trust.
+- Hooks are advisory and fail open. Discovery/reflection does not perform
+  retrieval or judge signals. The separate compounding due check reads bounded
+  coordination/metadata only, performs no model/network/body work and does not
+  wait on a busy lifecycle lock. Only an atomically eligible worker may start
+  compounding; reminder delivery never reserves a run.
+- Codex project hooks remain subject to project trust and, in CLI 0.160.1,
+  separate trust of the current hook definition. Setup binds registrations;
+  it does not grant either trust or prove native delivery.
 - The Copilot launcher enables Copilot's Bash-environment preference. Copilot
   persists that value-free preference; the temporary activation file and
   credential values are not stored in its settings.
 - Completion hooks are deliberately absent. All three CLIs receive reflection
   on prompts; Copilot's reminder uses `userPromptTransformed` and requires a
   trusted repository in prompt mode.
-- Codex desktop scheduling is live-proven. Claude recurring-task registration,
-  durable Copilot external/cloud scheduling, provider cloud agents and real
-  remote PR publication remain outside the current live evidence.
+- Codex desktop scheduling is live-proven. Other durable native local schedules,
+  provider cloud execution and real remote PR publication remain outside the
+  recorded evidence. Historical one-shot compounding proof does not establish
+  the new prompt-triggered delegated-worker behavior. Report that proof separately.
 - Live proof depends on authenticated provider access and current CLI behavior;
   provider upgrades can require adapter or command updates.
 

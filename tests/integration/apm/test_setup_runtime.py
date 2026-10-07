@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import shlex
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -269,16 +270,17 @@ def test_staged_setup_rejects_non_environment_failure(setup_consumer):
 def test_pending_environment_does_not_hide_broken_receipt_storage(setup_consumer):
     module, args, _, _ = setup_consumer
     _install_setup_fixture(module, args["consumer"])
-    before = (args["consumer"] / ".claude/apm-hooks.json").read_bytes()
     receipt_path = args["consumer"] / "usage"
     receipt_path.write_text("not a directory\n")
     config = json.loads(args["workspace"].read_text())
     config["receipts"] = {"directory": str(receipt_path)}
     args["workspace"].write_text(json.dumps(config))
-    with pytest.raises(module.SetupFailure) as error:
-        module.run_setup(**args, apm_mode="bind")
-    assert error.value.steps[-1].name == "doctor"
-    assert (args["consumer"] / ".claude/apm-hooks.json").read_bytes() == before
+    report = module.run_setup(**args, apm_mode="bind")
+    _assert_base_hooks(report)
+    assert report["doctor"]["status"] == "error"
+    assert report["doctor"]["readiness"]["read"] == "ready"
+    assert report["doctor"]["readiness"]["receipts"] == "not-ready"
+    assert report["doctor"]["diagnostics"]
 
 
 def test_bind_requires_installed_package_lockfile(setup_consumer):
@@ -320,6 +322,284 @@ def _portable_setup(setup_consumer, monkeypatch):
     )
     _install_setup_fixture(module, args["consumer"])
     return module, args, env_file, commands
+
+
+def _enable_compounding(args: dict) -> Path:
+    consumer = args["consumer"]
+    for name in ("signals", "usage"):
+        (consumer / "ai" / name).mkdir(parents=True)
+    value = json.loads(args["workspace"].read_text())
+    value.update(
+        signal_storage={"scaffold_root": str(consumer), "code_root": str(consumer.parent)},
+        receipts={"enabled": True, "directory": str(consumer / "ai/usage"), "retention_days": 30},
+        setup={"compounding": {"mode": "prompt", "owner": "example-shared-store"}},
+    )
+    args["workspace"].write_text(json.dumps(value))
+    package = consumer / "apm_modules/_local/knowledge-agent-pack"
+    skill = package / ".apm/skills/knowledge-compound/SKILL.md"
+    shutil.copytree(SCRIPT.parents[2] / "knowledge-compound", skill.parent)
+    return skill
+
+
+def _activate_compounding(report: dict) -> None:
+    activation = report["compounding"]["activation"]
+    assert activation["after"] == "consumer-checks"
+    result = subprocess.run(
+        shlex.split(activation["command"]),
+        input=json.dumps(activation["request"]),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_compounding_activation_follows_verified_consumer_binding(setup_consumer, monkeypatch):
+    module, args, _, _ = _portable_setup(setup_consumer, monkeypatch)
+    skill = _enable_compounding(args)
+    activity = args["consumer"] / "ai/signals/compound-activity.jsonl"
+    prepared = module.run_setup(**args, apm_mode="prepare", portable_hooks=True)
+    assert prepared["compounding"]["status"] == "pending"
+    assert not activity.exists()
+    first = module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    assert first["compounding"]["status"] == "pending"
+    assert first["compounding"]["reason"] == "activation-required"
+    assert not activity.exists()
+    assert first["automation_registration"] == "prompt-hook"
+    repeated = module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    assert repeated["compounding"] == first["compounding"]
+    assert not activity.exists()
+    for registration in first["hooks"]["registrations"].values():
+        for command in registration["commands"].values():
+            arguments = shlex.split(command)
+            assert arguments[arguments.index("--profile") + 1] == "example"
+            assert (
+                arguments[arguments.index("--compound-skill") + 1]
+                == skill.relative_to(args["consumer"]).as_posix()
+            )
+            assert "--settings" not in arguments
+            assert str(args["consumer"]) not in command
+    # The fixture's owned-registration checks above precede explicit activation.
+    _activate_compounding(first)
+    before = activity.read_bytes()
+    ready = module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    assert ready["compounding"]["status"] == "ready"
+    assert "activation" not in ready["compounding"]
+    assert (
+        module.run_setup(**args, apm_mode="bind", portable_hooks=True)["compounding"]
+        == ready["compounding"]
+    )
+    assert activity.read_bytes() == before
+
+
+def _assert_base_hooks(report: dict) -> None:
+    assert report["hooks"]["status"] == "ready"
+    for registration in report["hooks"]["registrations"].values():
+        assert all(
+            "--compound-skill" not in command for command in registration["commands"].values()
+        )
+
+
+def test_conflicting_trigger_preserves_activity_and_binds_base_hooks(setup_consumer, monkeypatch):
+    module, args, _, _ = _portable_setup(setup_consumer, monkeypatch)
+    _enable_compounding(args)
+    first = module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    _activate_compounding(first)
+    activity = args["consumer"] / "ai/signals/compound-activity.jsonl"
+    before = activity.read_bytes()
+    value = json.loads(args["workspace"].read_text())
+    value["setup"]["compounding"]["owner"] = "different-store-owner"
+    args["workspace"].write_text(json.dumps(value))
+    report = module.run_setup(**args, apm_mode="bind", portable_hooks=True)
+    assert report["compounding"]["reason"] == "trigger-conflict"
+    _assert_base_hooks(report)
+    assert activity.read_bytes() == before
+
+
+@pytest.mark.parametrize("configured", [False, True])
+def test_bind_preserves_active_run_without_configuring_trigger(setup_consumer, configured):
+    module, args, _, _ = setup_consumer
+    _install_setup_fixture(module, args["consumer"])
+    _enable_compounding(args)
+    first = module.run_setup(**args, apm_mode="bind")
+    if configured:
+        _activate_compounding(first)
+    command = first["compounding"]["activation"]["command"]
+    result = subprocess.run(
+        shlex.split(command),
+        input=json.dumps({"action": "start", "workspace_id": "repo:orders"}),
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    activity = args["consumer"] / "ai/signals/compound-activity.jsonl"
+    before = activity.read_bytes()
+    report = module.run_setup(**args, apm_mode="bind")
+    assert report["compounding"]["active"] is True
+    assert "activation" not in report["compounding"]
+    if configured:
+        assert report["compounding"]["status"] == "ready"
+    else:
+        assert report["compounding"]["reason"] == "active-run-recovery-required"
+        _assert_base_hooks(report)
+    assert activity.read_bytes() == before
+
+
+def test_absolute_compound_bind_preserves_selector_when_credentials_pending(setup_consumer):
+    module, args, _, _ = setup_consumer
+    _install_setup_fixture(module, args["consumer"])
+    skill = _enable_compounding(args)
+    first = module.run_setup(**args, apm_mode="bind")
+    assert first["environment"]["status"] == "not-ready"
+    for registration in first["hooks"]["registrations"].values():
+        for command in registration["commands"].values():
+            arguments = shlex.split(command)
+            assert arguments[arguments.index("--profile") + 1] == args["profile"]
+            assert arguments[arguments.index("--settings") + 1] == str(args["settings"])
+            assert arguments[arguments.index("--compound-skill") + 1] == str(skill)
+            assert "--environment-file" not in arguments
+
+
+@pytest.mark.parametrize("registry_change", ["changed", "pending", "removed"])
+def test_absolute_compound_binding_keeps_resumed_claude_declaration(
+    setup_consumer, monkeypatch, registry_change
+):
+    module, args, env_file, _ = setup_consumer
+    _install_setup_fixture(module, args["consumer"])
+    env_file.write_text("SOURCE_TOKEN=first-fictional-token\n")
+    hook = args["venv"] / "bin/agent-knowledge-hook"
+    hook.write_text(
+        f"#!/bin/sh\nexec {shlex.quote(sys.executable)} "
+        '-m agent_knowledge.entrypoints.hooks.runtime "$@"\n'
+    )
+    hook.chmod(0o700)
+    destination = args["consumer"] / "claude.env"
+    monkeypatch.setenv("CLAUDE_ENV_FILE", str(destination))
+
+    def session_start(report: dict) -> None:
+        command = report["hooks"]["registrations"]["claude"]["commands"]["SessionStart"]
+        result = subprocess.run(
+            shlex.split(command),
+            input=json.dumps({"hook_event_name": "SessionStart", "session_id": "fixture-session"}),
+            cwd=args["consumer"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert "credential activation failed" not in result.stdout
+        assert "first-fictional-token" not in result.stdout
+
+    first = module.run_setup(**args, apm_mode="bind")
+    session_start(first)
+    initial = destination.read_bytes()
+    _enable_compounding(args)
+    registry = json.loads(args["settings"].read_text())
+    environment = registry["profiles"]["example"]["environment"]
+    if registry_change == "removed":
+        del registry["profiles"]["example"]["environment"]
+    else:
+        replacement = args["consumer"] / "replacement.env"
+        replacement.write_text(
+            "SOURCE_TOKEN="
+            + ("second-fictional-token" if registry_change == "changed" else "")
+            + "\n"
+        )
+        replacement.chmod(0o600)
+        environment["file"] = str(replacement)
+    args["settings"].write_text(json.dumps(registry))
+    bound = module.run_setup(**args, apm_mode="bind")
+    assert (
+        bound["environment"]["session_state_directory"]
+        == first["environment"]["session_state_directory"]
+    )
+    session_start(bound)
+    assert destination.read_bytes() == initial + initial
+    state = Path(first["environment"]["session_state_directory"])
+    assert len(list(state.glob("*.json"))) == 1
+
+
+def test_compound_bind_supports_explicit_workspace_without_profile(setup_consumer):
+    module, args, _, _ = setup_consumer
+    _install_setup_fixture(module, args["consumer"])
+    _enable_compounding(args)
+    args.pop("profile")
+    args.pop("settings")
+    report = module.run_setup(**args, apm_mode="bind")
+    assert report["compounding"]["reason"] == "activation-required"
+    for registration in report["hooks"]["registrations"].values():
+        for command in registration["commands"].values():
+            arguments = shlex.split(command)
+            assert arguments[arguments.index("--config") + 1] == str(args["workspace"])
+            assert "--profile" not in arguments
+
+
+def test_missing_compound_skill_does_not_register_trigger(setup_consumer):
+    module, args, _, _ = setup_consumer
+    _install_setup_fixture(module, args["consumer"])
+    _enable_compounding(args).unlink()
+    report = module.run_setup(**args, apm_mode="bind")
+    assert report["compounding"]["reason"] == "compound-skill-missing"
+    _assert_base_hooks(report)
+    assert not (args["consumer"] / "ai/signals/compound-activity.jsonl").exists()
+
+
+@pytest.mark.parametrize("change", ["skill", "resource", "extra-resource", "missing-resource"])
+def test_stale_compound_skill_resources_leave_base_hooks_ready(setup_consumer, change):
+    module, args, _, _ = setup_consumer
+    _install_setup_fixture(module, args["consumer"])
+    skill = _enable_compounding(args)
+    resource = next((skill.parent / "references").rglob("*.md"))
+    if change == "missing-resource":
+        resource.unlink()
+    else:
+        target = {
+            "skill": skill,
+            "resource": resource,
+            "extra-resource": skill.parent / "extra.md",
+        }[change]
+        target.write_text("# Stale installed content\n")
+    report = module.run_setup(**args, apm_mode="bind")
+    assert report["compounding"]["reason"] == "compound-skill-mismatch"
+    _assert_base_hooks(report)
+    assert not (args["consumer"] / "ai/signals/compound-activity.jsonl").exists()
+
+
+def test_standalone_helper_cannot_invent_compound_reference(setup_consumer, monkeypatch):
+    module, args, _, _ = setup_consumer
+    _install_setup_fixture(module, args["consumer"])
+    _enable_compounding(args)
+    monkeypatch.setattr(module, "__file__", str(args["consumer"] / "standalone/scripts/setup.py"))
+    report = module.run_setup(**args, apm_mode="bind")
+    assert report["compounding"]["reason"] == "compound-skill-reference-unavailable"
+    _assert_base_hooks(report)
+
+
+def test_corrupt_compound_state_leaves_base_hooks_ready(setup_consumer):
+    module, args, _, _ = setup_consumer
+    _install_setup_fixture(module, args["consumer"])
+    _enable_compounding(args)
+    activity = args["consumer"] / "ai/signals/compound-activity.jsonl"
+    activity.write_text("broken activity\n")
+    report = module.run_setup(**args, apm_mode="bind")
+    assert report["compounding"]["status"] == "error"
+    _assert_base_hooks(report)
+    assert activity.read_text() == "broken activity\n"
+
+
+@pytest.mark.parametrize("directory", ["signals", "usage"])
+def test_compound_write_failure_leaves_read_ready_base_binding(setup_consumer, directory):
+    module, args, _, _ = setup_consumer
+    _install_setup_fixture(module, args["consumer"])
+    _enable_compounding(args)
+    missing = args["consumer"] / "ai" / directory
+    missing.rmdir()
+    report = module.run_setup(**args, apm_mode="bind")
+    assert report["doctor"]["readiness"]["read"] == "ready"
+    assert report["compounding"]["reason"] == "compound-write-not-ready"
+    _assert_base_hooks(report)
+    assert not missing.exists()
 
 
 def test_portable_bind_keeps_hook_bytes_stable_when_credentials_become_ready(
