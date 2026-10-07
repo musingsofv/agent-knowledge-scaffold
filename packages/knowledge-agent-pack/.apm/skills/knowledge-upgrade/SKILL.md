@@ -20,13 +20,24 @@ workspace explicit on every configured runtime call.
 ## 1. Identify what needs updating and where it runs
 
 Inspect the current instructions, Git state, verified remotes, installed package
-metadata and selected `describe`/`context`. Record the target revision and which
+metadata and selected `describe`/`context`. Record the coordinator skill's revision
+separately from the selected installation target and which
 knowledge repository, runtimes, consumers and environments are in scope. A
 consumer-only refresh need not merge or alter its canonical knowledge source.
 If the installed catalog predates this skill, read it from the verified target
 checkout before refreshing APM; a Python wheel does not contain the skills.
+The coordinator may be newer than the target; derive the expected installed
+skills and resources from that target's manifest, source tree and ownership
+records, not the coordinator's own catalog.
 Do not infer access, publication permission or instance membership from a token,
 folder name or package installation.
+
+Before replacing a runtime, verify that both its selected artifact and the
+matching APM dependency are available through the consumer's intended installation
+and publication route. A local commit alone does not make a remote dependency
+reproducible. Preserve approved local-source workflows; a reviewed remote PR
+must be reproducible through its repository-owned workflow. Resolve missing
+artifacts before dependent runtime changes, while continuing independent work.
 
 Before choosing paths, use setup's
 [execution-location checks](../knowledge-setup/references/containers.md#establish-execution-location-first)
@@ -112,6 +123,9 @@ and the applicable consumer instructions. Preserve pinned APM, all registered
 harness targets, local skill sources, portable dependency references and the
 repository's instruction-compilation and staged-content guarantees. Select APM
 responsibility independently from runtime mode.
+For a local package input, apply the reference's
+[source-inventory checks](../knowledge-setup/references/existing-repository.md#check-local-package-inputs)
+before installation; ignored generated files can otherwise enter deployment locks.
 
 Use `knowledge-setup/scripts/setup_runtime.py` from the verified complete target
 package with the selected workspace, explicit venv, package, registry/profile
@@ -129,8 +143,10 @@ and targets. For repository-owned integration the sequence is:
 Use setup's managed mode only when the consumer permits it. Preserve the existing
 [portable binding mode](../knowledge-setup/references/portable-hooks.md) for shared
 checkouts; do not replace environment-local lookup with one machine's absolute
-paths. Verify the installed upgrade, setup and compound skills and their referenced
-resources, and the consumer's generated profile recommendation with overrides intact.
+paths. Verify the installed skills and their referenced resources against the
+selected target's actual inventory; do not require a skill
+that exists only in the newer coordinator. Verify the consumer's generated profile
+recommendation with overrides intact.
 A successful bind does not certify instruction compilation or native hook delivery.
 
 ## 5. Verify affected behavior and preserve compounding ownership

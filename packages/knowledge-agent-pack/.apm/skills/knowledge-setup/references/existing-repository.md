@@ -37,6 +37,22 @@ organization's approved mirror/tag/commit. A local source path is also supported
 for development. Do not switch a remote dependency to an absolute local path
 as a binding workaround.
 
+## Check local package inputs
+
+Before APM consumes a local package, inspect its actual input tree, including
+ignored files. A clean Git status does not establish an authored-only input:
+APM 0.29.0 can deploy `__pycache__` and `.pyc` files and record their
+machine-specific hashes. Use the repository's clean-source projection when
+available, or remove only inspected, confirmed generated interpreter caches
+from the selected package input. Preserve authored resources and unrelated work.
+
+Prevent new caches during Python validation/generation with
+`PYTHONDONTWRITEBYTECODE=1` where supported; this does not remove existing caches.
+Review the final installed resource inventory and lock against the intended
+authored input. If generated caches were deployed, correct the input and rerun
+the owned install/compile, supported bind and final checks. Do not hand-edit
+deployed files or lock hashes, or weaken inventory checks to accept the artifacts.
+
 ## Prepare without changing consumer configuration
 
 Create or complete the approved workspace/catalog and private profile registry

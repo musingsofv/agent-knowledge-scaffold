@@ -1,5 +1,5 @@
 lockfile_version: '1'
-generated_at: '2026-10-07T07:54:23.765546+00:00'
+generated_at: '2026-10-07T12:29:01.657096+00:00'
 apm_version: 0.29.0
 dependencies:
 - repo_url: _local/knowledge-agent-pack
@@ -26,8 +26,6 @@ dependencies:
   - .agents/skills/knowledge-setup/references/portable-hooks.md
   - .agents/skills/knowledge-setup/references/profiles.md
   - .agents/skills/knowledge-setup/references/publication.md
-  - .agents/skills/knowledge-setup/scripts/__pycache__/launch_container.cpython-311.pyc
-  - .agents/skills/knowledge-setup/scripts/__pycache__/setup_runtime.cpython-311.pyc
   - .agents/skills/knowledge-setup/scripts/launch_container.py
   - .agents/skills/knowledge-setup/scripts/prepare_container_profile.py
   - .agents/skills/knowledge-setup/scripts/register_profile.py
@@ -55,8 +53,6 @@ dependencies:
   - .claude/skills/knowledge-setup/references/portable-hooks.md
   - .claude/skills/knowledge-setup/references/profiles.md
   - .claude/skills/knowledge-setup/references/publication.md
-  - .claude/skills/knowledge-setup/scripts/__pycache__/launch_container.cpython-311.pyc
-  - .claude/skills/knowledge-setup/scripts/__pycache__/setup_runtime.cpython-311.pyc
   - .claude/skills/knowledge-setup/scripts/launch_container.py
   - .claude/skills/knowledge-setup/scripts/prepare_container_profile.py
   - .claude/skills/knowledge-setup/scripts/register_profile.py
@@ -78,19 +74,17 @@ dependencies:
     .agents/skills/knowledge-setup/references/container-profiles.md: sha256:9cb4a802a177dee4946424431dcb54c51ef019ddaa3592e496c8bea64a826682
     .agents/skills/knowledge-setup/references/containers.md: sha256:7a4d8074ed5f82201d4d74ad0fb3d667d6ff268aee8ed47509720431003854f5
     .agents/skills/knowledge-setup/references/copilot-scheduled.md: sha256:986838fe648d303435127f405ca5e8c2f2ef054bf4b2413cb35e352250d1736c
-    .agents/skills/knowledge-setup/references/existing-repository.md: sha256:aa57cf0b0daea52dac204ebe8f9d1d663f3245699101d655000397ef9709bdeb
+    .agents/skills/knowledge-setup/references/existing-repository.md: sha256:5e7568c91ff2e70047218f38f8be42d1f9761a127ce725817708a725514650d1
     .agents/skills/knowledge-setup/references/knowledge-instance.md: sha256:e1768039bf7cc07ee8b777b60abe6fead8133eba590ef7320e9d293e375d29f1
     .agents/skills/knowledge-setup/references/local-compounding.md: sha256:87b45b1f0cb923922c524b0ec129fabeffbb2a42fd34a45c189c0d96c3b8fda8
     .agents/skills/knowledge-setup/references/portable-hooks.md: sha256:f1d0945e7544a43e926f15e4c8a0ae2b68f59046fd5d47d7ccb3c6679f8033c0
     .agents/skills/knowledge-setup/references/profiles.md: sha256:006c044b812ca760ce91c537f0b977096a9d5cb2f36c82d83ccf370e38f41a65
     .agents/skills/knowledge-setup/references/publication.md: sha256:b666ae0ac2ccfaff37110f107f40c27b1631754d82deb1ad7710c547d86eafcd
-    .agents/skills/knowledge-setup/scripts/__pycache__/launch_container.cpython-311.pyc: sha256:6cb828c3b36e799781033b481899bbe9ec277efc595770dedfd15f19ce6c0c78
-    .agents/skills/knowledge-setup/scripts/__pycache__/setup_runtime.cpython-311.pyc: sha256:a674871a9f4587134bdc0628ffb19ab8f186206d7ca6f7bc772ffea8a716f455
     .agents/skills/knowledge-setup/scripts/launch_container.py: sha256:ac7f0ad61818806a90d90592a2f076677719074f19f9d21c161610c26e081664
     .agents/skills/knowledge-setup/scripts/prepare_container_profile.py: sha256:8599374544ee7f8d9b52f0c4d9401768ca8218546c22d68391409a209c0aedac
     .agents/skills/knowledge-setup/scripts/register_profile.py: sha256:2dd4296fa048d740933c8a8923c0fb28beaa6fbf8a029f3431c674fd4a9abd98
     .agents/skills/knowledge-setup/scripts/setup_runtime.py: sha256:f5a526d4aeac2084a49aaa31b5fe6545bf60d9796f0f6a3b0e3a065b62091738
-    .agents/skills/knowledge-upgrade/SKILL.md: sha256:c4ae53a706395f5484fd778740a803548cb0e31f88ae89f82a9403f662de1f8b
+    .agents/skills/knowledge-upgrade/SKILL.md: sha256:c4fb61fab23ec6c4b01ae25e1ae46275bb5d9b0c82a3f4042b1a68c0476143d2
     .agents/skills/knowledge-upgrade/references/scaffold-upgrades.md: sha256:ccd47735f377199761a1ef5c60fe96aa54b9740162d116a4da175eb4fa4def4f
     .claude/rules/agent-knowledge-discovery.md: sha256:6011494dcda0af9b3a8eef1684232a195ff5dbb54ff01f73d38e88843a292b4b
     .claude/skills/knowledge-compound/SKILL.md: sha256:66cf86e59e8e6b1fc83ba262b006b3134e530ce573ce2d9c16af05a9e2b5d02a
@@ -104,19 +98,17 @@ dependencies:
     .claude/skills/knowledge-setup/references/container-profiles.md: sha256:9cb4a802a177dee4946424431dcb54c51ef019ddaa3592e496c8bea64a826682
     .claude/skills/knowledge-setup/references/containers.md: sha256:7a4d8074ed5f82201d4d74ad0fb3d667d6ff268aee8ed47509720431003854f5
     .claude/skills/knowledge-setup/references/copilot-scheduled.md: sha256:986838fe648d303435127f405ca5e8c2f2ef054bf4b2413cb35e352250d1736c
-    .claude/skills/knowledge-setup/references/existing-repository.md: sha256:aa57cf0b0daea52dac204ebe8f9d1d663f3245699101d655000397ef9709bdeb
+    .claude/skills/knowledge-setup/references/existing-repository.md: sha256:5e7568c91ff2e70047218f38f8be42d1f9761a127ce725817708a725514650d1
     .claude/skills/knowledge-setup/references/knowledge-instance.md: sha256:e1768039bf7cc07ee8b777b60abe6fead8133eba590ef7320e9d293e375d29f1
     .claude/skills/knowledge-setup/references/local-compounding.md: sha256:87b45b1f0cb923922c524b0ec129fabeffbb2a42fd34a45c189c0d96c3b8fda8
     .claude/skills/knowledge-setup/references/portable-hooks.md: sha256:f1d0945e7544a43e926f15e4c8a0ae2b68f59046fd5d47d7ccb3c6679f8033c0
     .claude/skills/knowledge-setup/references/profiles.md: sha256:006c044b812ca760ce91c537f0b977096a9d5cb2f36c82d83ccf370e38f41a65
     .claude/skills/knowledge-setup/references/publication.md: sha256:b666ae0ac2ccfaff37110f107f40c27b1631754d82deb1ad7710c547d86eafcd
-    .claude/skills/knowledge-setup/scripts/__pycache__/launch_container.cpython-311.pyc: sha256:6cb828c3b36e799781033b481899bbe9ec277efc595770dedfd15f19ce6c0c78
-    .claude/skills/knowledge-setup/scripts/__pycache__/setup_runtime.cpython-311.pyc: sha256:a674871a9f4587134bdc0628ffb19ab8f186206d7ca6f7bc772ffea8a716f455
     .claude/skills/knowledge-setup/scripts/launch_container.py: sha256:ac7f0ad61818806a90d90592a2f076677719074f19f9d21c161610c26e081664
     .claude/skills/knowledge-setup/scripts/prepare_container_profile.py: sha256:8599374544ee7f8d9b52f0c4d9401768ca8218546c22d68391409a209c0aedac
     .claude/skills/knowledge-setup/scripts/register_profile.py: sha256:2dd4296fa048d740933c8a8923c0fb28beaa6fbf8a029f3431c674fd4a9abd98
     .claude/skills/knowledge-setup/scripts/setup_runtime.py: sha256:f5a526d4aeac2084a49aaa31b5fe6545bf60d9796f0f6a3b0e3a065b62091738
-    .claude/skills/knowledge-upgrade/SKILL.md: sha256:c4ae53a706395f5484fd778740a803548cb0e31f88ae89f82a9403f662de1f8b
+    .claude/skills/knowledge-upgrade/SKILL.md: sha256:c4fb61fab23ec6c4b01ae25e1ae46275bb5d9b0c82a3f4042b1a68c0476143d2
     .claude/skills/knowledge-upgrade/references/scaffold-upgrades.md: sha256:ccd47735f377199761a1ef5c60fe96aa54b9740162d116a4da175eb4fa4def4f
     .github/hooks/knowledge-agent-pack-knowledge-discovery.json: sha256:40cfc466cb0137e8005133050d1328017c25f48996fbdf33dc8ec823f5b8c9be
     .github/instructions/agent-knowledge-discovery.instructions.md: sha256:792c357f2d8b2cb43d9c3b851839f323878a59f3a664a2ee6822146fe1db10ce
@@ -267,7 +259,7 @@ deployments:
   owners:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:aa57cf0b0daea52dac204ebe8f9d1d663f3245699101d655000397ef9709bdeb
+  content_hash: sha256:5e7568c91ff2e70047218f38f8be42d1f9761a127ce725817708a725514650d1
 - kind: project-relative
   target: claude
   value: .claude/skills/knowledge-setup/references/knowledge-instance.md
@@ -313,24 +305,6 @@ deployments:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
   content_hash: sha256:b666ae0ac2ccfaff37110f107f40c27b1631754d82deb1ad7710c547d86eafcd
-- kind: project-relative
-  target: claude
-  value: .claude/skills/knowledge-setup/scripts/__pycache__/launch_container.cpython-311.pyc
-  runtime: null
-  scope: project
-  owners:
-  - ./packages/knowledge-agent-pack
-  active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:6cb828c3b36e799781033b481899bbe9ec277efc595770dedfd15f19ce6c0c78
-- kind: project-relative
-  target: claude
-  value: .claude/skills/knowledge-setup/scripts/__pycache__/setup_runtime.cpython-311.pyc
-  runtime: null
-  scope: project
-  owners:
-  - ./packages/knowledge-agent-pack
-  active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:a674871a9f4587134bdc0628ffb19ab8f186206d7ca6f7bc772ffea8a716f455
 - kind: project-relative
   target: claude
   value: .claude/skills/knowledge-setup/scripts/launch_container.py
@@ -384,7 +358,7 @@ deployments:
   owners:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:c4ae53a706395f5484fd778740a803548cb0e31f88ae89f82a9403f662de1f8b
+  content_hash: sha256:c4fb61fab23ec6c4b01ae25e1ae46275bb5d9b0c82a3f4042b1a68c0476143d2
 - kind: project-relative
   target: claude
   value: .claude/skills/knowledge-upgrade/references/scaffold-upgrades.md
@@ -519,7 +493,7 @@ deployments:
   owners:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:aa57cf0b0daea52dac204ebe8f9d1d663f3245699101d655000397ef9709bdeb
+  content_hash: sha256:5e7568c91ff2e70047218f38f8be42d1f9761a127ce725817708a725514650d1
 - kind: project-relative
   target: codex
   value: .agents/skills/knowledge-setup/references/knowledge-instance.md
@@ -565,24 +539,6 @@ deployments:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
   content_hash: sha256:b666ae0ac2ccfaff37110f107f40c27b1631754d82deb1ad7710c547d86eafcd
-- kind: project-relative
-  target: codex
-  value: .agents/skills/knowledge-setup/scripts/__pycache__/launch_container.cpython-311.pyc
-  runtime: null
-  scope: project
-  owners:
-  - ./packages/knowledge-agent-pack
-  active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:6cb828c3b36e799781033b481899bbe9ec277efc595770dedfd15f19ce6c0c78
-- kind: project-relative
-  target: codex
-  value: .agents/skills/knowledge-setup/scripts/__pycache__/setup_runtime.cpython-311.pyc
-  runtime: null
-  scope: project
-  owners:
-  - ./packages/knowledge-agent-pack
-  active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:a674871a9f4587134bdc0628ffb19ab8f186206d7ca6f7bc772ffea8a716f455
 - kind: project-relative
   target: codex
   value: .agents/skills/knowledge-setup/scripts/launch_container.py
@@ -636,7 +592,7 @@ deployments:
   owners:
   - ./packages/knowledge-agent-pack
   active_owner: ./packages/knowledge-agent-pack
-  content_hash: sha256:c4ae53a706395f5484fd778740a803548cb0e31f88ae89f82a9403f662de1f8b
+  content_hash: sha256:c4fb61fab23ec6c4b01ae25e1ae46275bb5d9b0c82a3f4042b1a68c0476143d2
 - kind: project-relative
   target: codex
   value: .agents/skills/knowledge-upgrade/references/scaffold-upgrades.md
