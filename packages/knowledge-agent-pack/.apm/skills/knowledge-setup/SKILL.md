@@ -2,19 +2,24 @@
 name: knowledge-setup
 license: 0BSD
 description: >
-  Set up an organization-neutral knowledge workspace from business context,
-  including runtime, hooks and compounding. Use when onboarding or reconfiguring.
-  Do not use when processing signals; use knowledge-compound.
+  Set up an organization-neutral knowledge workspace, runtime, hooks and compounding.
+  Use for initial adoption or configuration changes.
+  Do not use for upgrades or processing signals.
   Success means validated configuration and reported runtime/automation readiness.
 ---
 
 # Knowledge setup
 
 Use this skill when a consumer adopts the scaffold or changes its business
-context, workspace, runtime or harness targets. Help the developer choose
+context, workspace or harness targets. Help the developer choose
 meaningful knowledge boundaries and vocabulary; derive routine paths and
 runtime values. Setup may create an empty knowledge source. It does not invent
 business facts, copy a corpus or implement a scheduler.
+
+Use [knowledge-upgrade](../knowledge-upgrade/SKILL.md) to integrate upstream or
+refresh an existing runtime/package on hosts or in containers. That skill
+coordinates upgrades using this skill's provisioning and binding mechanisms.
+Use `knowledge-compound` to process signals.
 
 For first use, the developer clones the scaffold and opens that checkout in
 their harness. The agent can read this bundled `SKILL.md` by path before APM
@@ -37,7 +42,7 @@ consumers and records their routes in the selected local task or authored
 setup context; human review and
 merge remain separate from opening a PR.
 When adopting a fresh scaffold clone, or configuring an existing scaffold-derived
-knowledge instance, read [Scaffold maintenance and upgrades](references/scaffold-upgrades.md)
+knowledge instance, read [Adopt a knowledge instance](references/knowledge-instance.md)
 before selecting publication. It owns conversion of the clone into one instance
 checkout with `origin` for the user's repository and `scaffold` for updates,
 plus the central maintainer instruction. Do not infer that role from the
@@ -91,7 +96,7 @@ preflight; installation/compilation and binding recur only for relevant changes.
 4. Confirm those meaningful choices together before writing configuration or
    registering vocabulary. Existing user approval carries forward; an unchanged
    setup does not need another interview. For fresh adoption, establish and
-   verify the user's repository and both remotes using the scaffold-upgrades
+   verify the user's repository and both remotes using the knowledge-instance
    reference before authoring publication settings. Register confirmed new
    concepts when necessary, then create or complete the catalog and workspace
    YAML using the defaults below. Empty catalogs are supported; an unknown ID in
@@ -108,12 +113,12 @@ preflight; installation/compilation and binding recur only for relevant changes.
 6. For a verified scaffold-derived knowledge instance, persist its brief
    central-maintainer route in that checkout's authored APM source, including
    its verified upstream URL/name, then regenerate and check its harness outputs
-   using the scaffold-upgrades reference. This is distinct from the consumer's
+   using the knowledge-instance reference. This is distinct from the consumer's
    profile recommendation. Reuse existing authorization and equivalent routing;
    report an unresolved source owner, upstream or ancestry as pending rather
    than guessing or creating a history baseline automatically.
 7. Finish fresh adoption by reviewing and publishing the instance's non-secret
-   bootstrap files through the scaffold-upgrades reference. Verify the catalog
+   bootstrap files through the knowledge-instance reference. Verify the catalog
    and maintainer instructions reach the remote base branch before declaring
    the shared instance ready; an initial push of untouched scaffold files is
    not a published setup.
@@ -123,7 +128,7 @@ The skill owns these defaults and does not ask the developer to supply them:
 | Value | Default and behavior |
 | --- | --- |
 | Profile label/registry | Suggest a lowercase business/project label in `~/.config/agent-knowledge/config.yaml`; confirm it with the meaningful choices. Propose the first as default; preserve later defaults. Use the profile reference for reviewed atomic edits. |
-| Knowledge instance | Reuse one adopted scaffold clone. Suggest a private repository named `knowledge` under the confirmed owner; `origin` publishes there and `scaffold` fetches the verified upstream. Preserve existing repositories and paths; follow the scaffold-upgrades reference before publication. |
+| Knowledge instance | Reuse one adopted scaffold clone. Suggest a private repository named `knowledge` under the confirmed owner; `origin` publishes there and `scaffold` fetches the verified upstream. Preserve existing repositories and paths; follow the knowledge-instance reference before publication. |
 | Project profile recommendation | For named-profile onboarding, persist the selected name and registry location once in the consumer's existing authored instruction source, then regenerate and verify its harness projections. Preserve an equivalent recommendation; resolve a conflicting one before replacing it. An explicit session choice still takes priority. |
 | Profile environment | Optional. Suggest the developer's absolute home path ending in `.config/agent-knowledge/<profile>.env`, mode `0600`, and mappings such as `github: WORK_GITHUB_TOKEN -> GH_TOKEN` when existing tool needs justify them. Expand `~` before authoring because registry paths are literal. Preserve an existing path/mapping. Never ask the developer to paste values into chat, copy values into YAML or create guessed credentials. |
 | Workspace identity | Preserve an existing ID. For a new file, derive a stable `workspace:<directory-slug>` from the configuration's durable parent and persist it. This identifies the setup; it does not claim organizational membership. |

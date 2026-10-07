@@ -23,9 +23,9 @@ integration tests. Use temporary directories and fictional business data.
 
 ## APM package changes
 
-Maintain the package under `packages/knowledge-agent-pack`. Its setup and
-compounding skills include their own references and setup script. The Python
-package owns the installed CLI guide and knowledge/signal templates.
+Maintain the package under `packages/knowledge-agent-pack`. Its setup, upgrade and
+compounding skills include their references; upgrade reuses the setup helpers.
+The Python package owns the installed CLI guide and knowledge/signal templates.
 
 Update affected contracts, examples and tests together. Root repository
 instructions are authored in `.apm/instructions/scaffold-local.instructions.md`;

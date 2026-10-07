@@ -18,8 +18,8 @@ description: Local development instructions for the agent-knowledge-scaffold rep
   `ai/plans/knowledge-final-pass.md`. Implement authorized work directly.
   Native scheduling tests remain paused unless the user reauthorizes them.
 - Keep APM distribution under `packages/`. The current package contains
-  `knowledge-setup` and `knowledge-compound`; broader skill ports are separate
-  work and must include their templates, references and scripts.
+  `knowledge-setup`, `knowledge-upgrade` and `knowledge-compound`; broader skill
+  ports are separate work and must include their templates, references and scripts.
 - Root `.apm/instructions/` owns repository development instructions. The
   package owns its consumer discovery instruction. Regenerate harness
   projections from these sources; do not hand-edit compiled copies or create
