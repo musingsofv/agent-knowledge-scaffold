@@ -414,6 +414,10 @@ proof; do not check the corresponding live criterion as complete. Native
 scheduling tests remain paused under existing instructions. Container acceptance
 does not require creating a scheduler or running real compounding.
 
+Owner scope update (2026-10-07): skip actual Windows-host verification for this
+delivery. Keep Windows support unverified; complete the remaining Linux checks
+and record provider-specific environment limits honestly.
+
 ## Acceptance evidence
 
 See [container launch proof](../../docs/container-launch-proof.md) for exact
@@ -435,7 +439,7 @@ implemented but lack the complete live coverage in their wording.
 | AC12 | Debian/Alpine runtime tests prove state/lock persistence and concurrent receipts. The authorized Codex retest additionally preserves 16 populated signal/receipt/coordination files across recreation, including hashes/inode identities, and repeat binding passes. |
 | AC13 | Source review and regressions preserve overrides. The generated launcher plus native Codex sandbox helper verifies private-file write denial and explicit read-only roots; actual model tools verify source denial. Operator-authorized Docker changes are per-container, with no daemon or host-policy changes and no privileged/Codex-bypass mode. |
 | AC14 | One consolidated semantic review confirms unchanged state authority, native worker interface, scheduling preference/fallback and publication boundaries; no new trigger or scheduler is installed. |
-| AC15, AC16 | Separate proof reports, synchronized resources, 1,871 passing tests plus 84 affected tests after the final fixture-path adjustment, lint/format/type/skill checks, build and isolated fresh-consumer checks. Windows-host mounts and dedicated Claude/Copilot read-only/credential-write isolation remain explicitly unverified. |
+| AC15, AC16 | Separate proof reports, synchronized resources, 1,871 passing tests plus 84 affected tests after the final fixture-path adjustment, lint/format/type/skill checks, build and isolated fresh-consumer checks. Final Linux probes record Claude's strict sandbox startup failure and Copilot's distinct tool-permission guarantees; full OS isolation remains unverified for those providers. Windows-host verification is skipped by explicit owner instruction. |
 
 ## Current checkpoint
 
@@ -474,8 +478,21 @@ implemented but lack the complete live coverage in their wording.
   diagnosis/verification, not another review. Existing real consumers, profiles,
   credentials and automation registrations were not changed. No push/PR/merge.
   The disposable test container is stopped with its volume and evidence retained.
-- Remaining proof: actual Windows-host mounts; dedicated private-file write
-  denial and explicit read-only launches for Claude/Copilot. Provider operation
-  on Alpine is not claimed from Python tests. Native scheduling remains paused.
-  Any follow-up should reuse this candidate and proof, preserve user work and
-  avoid another review round or routine consumer installation.
+- Final Linux isolation verification is recorded in
+  `.cache/container-launch/provider-isolation/report.json`. Two strict Claude
+  sandbox sessions fail before tool execution at the container's `/proc` mount
+  boundary, even with required Bubblewrap/socat installed. Copilot's ordinary
+  allowed shell can open the synthetic private file for writing (no bytes read
+  or changed); a separate native read-only tool policy permits reads and rejects
+  shell execution. Tool permissions are not OS filesystem isolation. Full
+  Copilot sandboxing needs missing networking helpers, TUN and namespace support.
+  The existing container policy was not weakened to manufacture passing proof.
+- Windows-host verification is explicitly skipped by the owner. Remaining
+  unverified scope is successful Claude/Copilot private-file and read-only OS
+  sandbox enforcement in a compatible container. Provider operation on Alpine
+  is not claimed from Python tests. Native scheduling remains paused. The
+  remaining planned Linux checks have been attempted; native hooks and
+  knowledge operations pass. Documentation-only closeout preserves prior code
+  gates; whitespace and saved-evidence correlation checks pass.
+- The same branch is ready for owner diff review. Reuse its existing evidence;
+  do not initiate another review round or routine consumer installation.

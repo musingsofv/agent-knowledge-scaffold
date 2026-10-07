@@ -146,7 +146,8 @@ Evidence: `.cache/container-runtime-final/report.json`. Python versions were
 `6a2ac00abe68f04819fe23d208d1b489192c7106f387bca5984e17941f74de7d`.
 This remains runtime/registration-fixture proof, not native model proof. The
 writable-runtime installation route passed the host fresh-consumer check and
-deterministic tests; direct Linux-container provisioning remains unverified.
+deterministic tests; the later direct Linux-container provisioning proof below
+also passed.
 
 ### Authorized Docker retest
 
@@ -433,10 +434,86 @@ The fixture container is stopped after verification; its persistent volume,
 provider-owned logins and evidence are retained. No actual consumer installation,
 profile/automation change, remote publication or additional review round occurred.
 
-Remaining limits are explicit: actual Windows-host mounts were not available;
+At that checkpoint, actual Windows-host mounts were not available;
 dedicated private-credential write denial and explicit read-only launch proof
 were completed for Codex only, not Claude/Copilot. Their native driver results
 therefore remain `partial` despite the verified retrieval/write/credential/hook
 results. Provider support on Alpine is not inferred from Python-runtime tests.
 Native scheduling tests remain paused. This follow-up adds no distributed image,
 Dockerfile, scheduler, separate hook or new compounding state store.
+
+## Final Linux isolation checks (2026-10-07)
+
+The owner explicitly skipped Windows-host verification. Four further native
+sessions completed the remaining Linux checks without changing the runtime,
+package, hook implementation or consumer configuration. This is affected
+verification, not another review round. The overall cross-provider isolation
+result remains **partial**; authenticated tools and native hooks still have the
+successful evidence above.
+
+Claude Code 2.1.236 was tested with per-session `sandbox.enabled: true`,
+`failIfUnavailable: true`, `allowUnsandboxedCommands: false`,
+`autoAllowBashIfSandboxed: false` and no excluded commands. Debian's Bubblewrap
+0.12.0, socat 1.8.0.3 and libwrap0 were installed only in the disposable fixture
+(2.3 MB installed). The write-limited policy denied the private and canonical
+roots; the explicit read-only policy additionally denied every selected task
+root. Same-UID controls could open the synthetic private file and task probes
+for writing outside the inner sandbox.
+
+Both actual Claude Bash calls failed before the probe ran:
+
+```text
+bwrap: Can't mount proc on /proc: Operation not permitted
+```
+
+Sessions were `12446e24-d8af-4138-afcd-11cc5ea1c7ac` (write-limited) and
+`7864e7ef-a3b4-48f6-9ad6-3f48040fc155` (read-only). The native tool errors prove
+the strict route refused execution under the current container policy; they do
+not prove private-file or read-only filesystem enforcement. The CLI still exited
+zero after reporting the tool failure, reinforcing why process success alone
+is insufficient. No weaker nested-sandbox mode, fallback outside the sandbox,
+additional capability or unmasked system path was enabled.
+
+Copilot CLI 1.0.86's documented `--experimental --sandbox` Linux route needs
+networking helpers and `/dev/net/tun`. The fixture lacks slirp4netns,
+iptables/ip6tables and their restore commands, and the TUN device; a user-plus-net
+namespace probe returns `EPERM`. Full Copilot OS sandbox acceptance therefore
+requires a separately compatible container configuration.
+
+Two native checks establish the actual narrower guarantees:
+
+- Session `aa21669a-265c-47e2-b0d3-3bb8f1caa8db` ran the explicitly permitted
+  Python probe. Opening the synthetic private env file with
+  `O_WRONLY | O_NOFOLLOW` succeeded, then immediately closed without reading,
+  truncating or writing bytes. Native telemetry reports `sandboxApplied:false`.
+  Tool/path approval does not isolate an allowed shell child's filesystem.
+- Session `d328c096-3941-4363-822d-ba27616143cf` added
+  `--deny-tool=write --deny-tool=shell`. Native `view` read the canonical fixture;
+  the same Bash command was rejected by the explicit `shell` rule. This proves
+  the tool-permission boundary, not a read-only filesystem for executing tools.
+
+No provider authentication files or credential values were inspected or exported.
+Only non-mutating opens targeted the synthetic private file. Hooks and ordinary
+harness bookkeeping remain outside the tool-sandbox claim. Native source-file
+denial also has an independent image-ownership constraint.
+
+Evidence is in `.cache/container-launch/provider-isolation/`: `report.json`,
+`prerequisites.json`, native transcripts, exact per-session parameters and
+selected Copilot hook records. Reproducible fixture diagnostics and the strict
+offline correlation verifier are in `.cache/container-launch-proof/`:
+`provider_isolation_diagnostic.py`, `copilot_isolation_diagnostic.py`,
+`copilot_private_open.py` and `verify_provider_isolation.py`. The verifier checks
+exact commands, session/tool identities, outside controls and native denial
+results; it does not equate model summaries with proof.
+
+References: [Claude sandbox scope](https://code.claude.com/docs/en/sandboxing),
+[Claude settings](https://code.claude.com/docs/en/settings),
+[Copilot local sandboxing](https://docs.github.com/en/copilot/how-tos/cloud-and-local-sandboxes/using-local-sandboxing)
+and [Copilot tool permissions](https://docs.github.com/en/copilot/how-tos/copilot-cli/use-copilot-cli/allowing-tools).
+Installed-version help/schema and observed behavior constrain these conclusions.
+
+Only proof documentation and the checkpoint changed in this follow-up.
+`git diff --check` and the offline evidence verifier passed; the prior source,
+package and fresh-consumer gates remain applicable. The container is stopped,
+with its logins, volume and evidence preserved. Windows is skipped by request;
+Claude/Copilot OS isolation remains the concrete unverified acceptance scope.
