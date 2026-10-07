@@ -8,7 +8,7 @@ omitting `publication` still disables publication for that source.
 ## Establish the destination
 
 For first adoption of a scaffold clone, complete
-[one checkout, two remotes](scaffold-upgrades.md#first-adoption-one-checkout-two-remotes)
+[one checkout, two remotes](knowledge-instance.md#first-adoption-one-checkout-two-remotes)
 before deriving the destination. Its initial `origin` may still be the reusable
 upstream. Never select that upstream for organizational knowledge PRs, even if
 the current account can write to it. After conversion, use the verified

@@ -27,7 +27,7 @@ below; completed plans retain implementation history and proof boundaries.
 - [Planned CLI contracts and realistic examples](ai/plans/knowledge-cli-examples.md)
 - [Fictional design fixtures](ai/plans/cli-examples/README.md)
 - [Fresh APM consumer setup](docs/fresh-consumer.md)
-- [Updating knowledge instances from the scaffold](docs/scaffold-upgrades.md)
+- [Upgrade existing knowledge installations on hosts or in containers](docs/scaffold-upgrades.md)
 - [Harness support and limitations](docs/harness-support.md)
 - [R8 harness proof](docs/r8-harness-proof.md)
 - [Minimal knowledge-agent-pack](packages/knowledge-agent-pack/README.md)
@@ -281,7 +281,7 @@ results, even though query validation already accepts pagination fields.
 
 APM distribution is a permanent part of this repository. The minimal neutral
 `packages/knowledge-agent-pack` installs the discovery instruction used by a
-fresh consumer, along with setup and compounding skills; the Python package
+fresh consumer, along with setup, upgrade and compounding skills; the Python package
 owns the CLI guide and templates. This is the only distributed APM package.
 Broader skill ports will include their templates, references and scripts in
 separately reviewed work.

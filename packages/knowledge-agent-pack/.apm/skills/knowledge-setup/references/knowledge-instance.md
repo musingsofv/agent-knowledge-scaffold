@@ -1,10 +1,11 @@
-# Updating a knowledge instance from the scaffold
+# Adopt a knowledge instance from the scaffold
 
 The scaffold owns reusable runtime, package, skills and hook behavior. A knowledge
 instance owns its corpus, catalog, workspace configuration and publication
 destination. Put reusable fixes in the scaffold first, then merge them into
 instances through a reviewed update branch. Instance-specific content stays in
-the instance.
+the instance. This reference owns first adoption and maintainer routing;
+[knowledge-upgrade](../../knowledge-upgrade/SKILL.md) owns later updates.
 
 ## First adoption: one checkout, two remotes
 
@@ -91,19 +92,19 @@ For a verified instance, use existing setup authorization to:
 2. Persist one brief instruction in the **instance's authored APM source**,
    using its registered layout and preserving other rules. Reuse an equivalent
    instruction; do not append duplicates on repeat setup. Include the verified
-   upstream URL/name and a resolvable route to this reference, for example:
+   upstream URL/name and a resolvable route to the upgrade skill, for example:
 
    ```text
    This checkout is a central knowledge instance derived from the scaffold.
    Before runtime/package maintenance or scaffold upgrades, follow the installed
-   knowledge-setup skill's references/scaffold-upgrades.md. Its upstream remote
+   knowledge-upgrade skill. Its upstream remote
    is scaffold at VERIFIED_URL; origin remains this instance's publication repo.
    Reusable fixes belong upstream. Preserve instance knowledge/private settings
    and upstream ancestry. Ordinary compounding does not upgrade the runtime.
    ```
 
    Replace `VERIFIED_URL` and the remote name with verified values. Keep the
-   routing reference discoverable through the installed skill; a verified
+   routing reference discoverable through the installed upgrade skill; a verified
    checkout-relative `docs/scaffold-upgrades.md` wrapper is also suitable. Do
    not copy the full upgrade procedure into always-on instructions.
    Reconcile an inherited "no organizational corpus" role statement within the
@@ -138,82 +139,3 @@ protection or merge without authorization. Verify the remote commit contains
 the initial catalog and maintainer route before declaring shared setup ready.
 The earlier push established the repository, but did not publish files authored
 afterward. A future clone still reruns setup for local remotes, paths and runtime.
-
-## Establish the upstream once
-
-Keep `origin` pointing at the instance's own repository: it remains the push and
-PR destination. Add a remote named `scaffold` using the verified template URL:
-`git remote add scaffold URL` (replace `URL` with that URL). Inspect existing
-remotes before adding or changing one. Remote configuration is local and is not
-copied when someone clones the instance; each new checkout needs this step.
-
-Fresh copies retaining the scaffold's Git ancestry can use normal merges. If
-either repository's history was reset, first have a maintainer verify a specific
-scaffold baseline against the instance and establish its ancestry without
-discarding instance changes. Do not blindly merge unrelated histories or record
-unreviewed scaffold changes as already incorporated. Preserve published scaffold
-ancestry once instances track it; rewriting it requires another explicit
-migration.
-
-## Apply later updates
-
-Start with a clean instance checkout and preserve any unrelated local work.
-Choose an unused update branch name. These commands assume both verified
-default branches are `main` and the upstream remote is `scaffold`; substitute
-the established names when different:
-
-```bash
-git fetch origin
-git fetch scaffold
-git switch main
-git pull --ff-only origin main
-git switch -c update/scaffold
-git merge --no-ff scaffold/main
-```
-
-Use a normal content merge for every subsequent update. Never use the `ours`
-merge strategy for upgrades: it would record the update while discarding it.
-
-Review the changes and resolve overlapping edits deliberately. Preserve the
-instance's corpus, catalog, private configuration, signal and receipt ignores,
-and authored instance instructions. Do not replace entire instance directories
-with a scaffold checkout. If generated harness instructions or installation
-metadata conflict, resolve their authored sources and regenerate projections
-with that repository's owned install/compile/check commands. Do not hand-edit
-generated instructions or overwrite them wholesale with upstream copies.
-
-Run the applicable repository checks, inspect the final diff, and push the
-update branch to `origin`. Open a PR in the instance repository for human review.
-Merge that PR using a method that retains the upstream commits and merge
-ancestry. **Do not squash or rebase the scaffold-update PR**: later upgrades need
-the recorded common history. If repository policy enforces squash-only or
-linear history, resolve that policy mismatch before proceeding.
-
-## Refresh installed consumers
-
-Preserve the chosen hook binding mode. Shared checkouts use
-[portable hooks](portable-hooks.md): update the runtime in each environment,
-refresh APM through its owning commands, then bind with `--portable-hooks` and
-the existing profile name. Do not replace portable commands with local absolute
-paths on upgrade. Per-environment registry and credential files remain local.
-
-A Git merge does not refresh an installed Python runtime, APM package, skills or
-hooks. After relevant updates, follow
-[`knowledge-setup`](../SKILL.md)
-for each affected installation. Keep the runtime and installed package aligned
-with the intended revision. For repositories with owned APM generation, use the
-[existing-repository procedure](existing-repository.md):
-prepare, owned installation/compilation, bind, then owned checks. Preserve the
-existing profiles, credentials and automation; verify `describe`, `context`,
-`doctor` and the relevant hook integration before declaring the update ready.
-
-## Which agents need this contract?
-
-- Scaffold maintainers own reusable changes and stable upstream history.
-- Knowledge-instance maintainers own upgrade PRs, conflict resolution and
-  preserving instance content; route reusable fixes back to the scaffold.
-- Application-repository agents use installed skills and the selected profile.
-  They refresh their integration when requested, but do not maintain the
-  instance's upstream relationship.
-- Normal compounding maintains knowledge and its owning local instructions or
-  skills. It does not fetch scaffold updates or upgrade the runtime implicitly.

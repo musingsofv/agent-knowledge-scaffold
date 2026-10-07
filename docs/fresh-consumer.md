@@ -31,7 +31,7 @@ including the catalog and authored instructions; local settings and credentials
 remain ignored. Existing instances reuse their remotes. GitHub's
 **Use this template** creates separate history and requires additional baseline
 handling; a normal clone supports future merge-based updates directly. See the
-installed [adoption and upgrade procedure](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/scaffold-upgrades.md).
+installed [adoption procedure](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/knowledge-instance.md).
 
 ## Prerequisites
 
@@ -193,8 +193,10 @@ are installed or the consumer's instruction generation has been verified.
 If the canonical source is a verified scaffold-derived knowledge checkout,
 setup also persists a brief central-maintainer instruction there and checks its
 compiled outputs, separately from the application's profile recommendation.
-The installed setup skill ships the [upstream maintenance procedure](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/scaffold-upgrades.md),
-including verified remote configuration per clone and reviewed upgrade merges.
+The installed [knowledge-upgrade skill](../packages/knowledge-agent-pack/.apm/skills/knowledge-upgrade/SKILL.md)
+owns later runtime/package refresh and reviewed upstream merges, including
+verification on local hosts and in existing containers. Setup's helpers still
+own provisioning, profiles and binding; upgrade coordinates them.
 Arbitrary knowledge sources and application repos do not inherit that role;
 setup does not automatically join unrelated histories or apply upgrades.
 

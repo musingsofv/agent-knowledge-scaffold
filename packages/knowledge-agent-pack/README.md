@@ -2,8 +2,8 @@
 
 knowledge-agent-pack is the minimal organization-neutral APM package
 for the agent-knowledge command. It installs one concise discovery
-instruction plus knowledge-setup and knowledge-compound skills for Codex,
-Claude Code, Copilot and other APM-compatible targets. The Python
+instruction plus knowledge-setup, knowledge-upgrade and knowledge-compound skills
+for Codex, Claude Code, Copilot and other APM-compatible targets. The Python
 distribution remains the owner of the CLI contract, guide and authoring
 templates.
 
@@ -20,7 +20,7 @@ For first adoption, the setup skill turns one scaffold clone into the user's
 knowledge instance: `origin` publishes to their own private repository and
 `scaffold` supplies upstream updates. It verifies that separation before
 configuring compounding PRs. Follow the installed
-[adoption procedure](.apm/skills/knowledge-setup/references/scaffold-upgrades.md#first-adoption-one-checkout-two-remotes);
+[adoption procedure](.apm/skills/knowledge-setup/references/knowledge-instance.md#first-adoption-one-checkout-two-remotes);
 existing instances reuse their repositories and remotes.
 
 For a fresh consumer, install the APM CLI first, then install this package
@@ -181,16 +181,24 @@ loaded credentials. Aliases share a signal-store owner.
 
 For a verified scaffold-derived central knowledge checkout, setup separately
 persists a maintainer route in that checkout's authored instructions and checks
-its generated outputs. The [upgrade procedure](.apm/skills/knowledge-setup/references/scaffold-upgrades.md)
-ships inside the installed skill; application hooks stay generic. Existing
+its generated outputs. The [knowledge-upgrade skill](.apm/skills/knowledge-upgrade/SKILL.md)
+owns subsequent maintenance; application hooks stay generic. Existing
 upstream identity is verified, and unrelated histories are not joined implicitly.
 
-The skill verifies runtime/read and signal/receipt write readiness before
+For existing installations, invoke `knowledge-upgrade` with the intended target
+revision and consumers. It reuses setup's runtime/APM/binding mechanisms and
+preserves local configuration, skills and compounding history. It covers host
+venvs, rebuilt immutable container runtimes and writable container-local venvs;
+verification uses the selected harness environment and exact launch integration.
+Pulling the source alone does not refresh installed runtimes or consumers.
+Consumer-only refresh does not require a canonical repository merge.
+
+Setup verifies runtime/read and signal/receipt write readiness before
 automation, along with installed skills and the dependencies the run actually
 uses. Unrelated unfinished service credentials do not block local compounding;
 required publication credentials do.
 
-The skill configures one trigger owner per shared signal store, including
+Setup configures one trigger owner per shared signal store, including
 profile aliases and multiple providers. The owner marker is
 `agent-knowledge-compound:<workspace_id>`. It prefers a verified durable local
 schedule, such as an available Codex desktop schedule. Codex CLI does not
