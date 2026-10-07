@@ -708,5 +708,13 @@ def test_copilot_permissions_use_exact_executable_names_and_fixture_read_directo
     directories = [
         arguments[i + 1] for i, value in enumerate(arguments[:-1]) if value == "--add-dir"
     ]
-    assert directories == [str(driver.STATE), "/opt/proof", str(driver.RUNTIME), "/opt/fixture"]
+    # The container venv interpreter resolves to /usr/bin/python3.13; native
+    # Copilot checks the real executable path as well as the venv path.
+    assert directories == [
+        str(driver.STATE),
+        "/opt/proof",
+        str(driver.RUNTIME),
+        "/opt/fixture",
+        "/usr/bin",
+    ]
     assert "--deny-url=*" in arguments and "--disable-builtin-mcps" in arguments
