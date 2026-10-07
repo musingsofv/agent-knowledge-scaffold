@@ -356,6 +356,15 @@ not rely on an ambient `PATH` entry for recovered hooks.
 Do not edit another package's hook entry or copy this hook into a second
 provider file.
 
+Binding verifies registration, not provider approval or actual reminder delivery.
+Before reporting hooks ready, follow
+[Provider trust and delivery](references/portable-hooks.md#provider-trust-and-delivery)
+for the installed harness. This applies to absolute and portable bindings. In
+Codex CLI 0.160.1, project trust does not approve individual hook definitions:
+the native `/hooks` review is a separate prerequisite, and changed definitions
+need review again. Keep registration, provider trust and observed lifecycle/prompt
+delivery separate in the completion report; setup never grants trust implicitly.
+
 The generated Codex and Claude records carry APM's `_apm_source` marker and
 contain both `SessionStart` and `UserPromptSubmit`. The lifecycle response
 contains discovery plus reflection; the prompt response contains reflection

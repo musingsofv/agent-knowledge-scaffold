@@ -2,8 +2,9 @@
 """Opt-in acceptance through real harness launchers in a disposable Linux container.
 
 The image is a test fixture, not a deployment product. No user home or knowledge
-checkout is mounted. Authentication is passed only by explicit provider-specific
-environment names; values never appear in argv, build contexts or saved reports.
+checkout is mounted. Authentication uses explicit provider-specific environment
+names or an opted-in Claude/Copilot login already saved inside the fixture.
+Values never appear in argv, build contexts or saved reports.
 Without --live-agent the report distinguishes installed/container evidence from
 unperformed native harness proof. No native scheduler or publication is invoked.
 """
@@ -16,6 +17,7 @@ import json
 import os
 import shlex
 import shutil
+import stat
 import subprocess
 import tempfile
 import uuid
@@ -45,8 +47,19 @@ AUTH_VARIABLES = {
     "claude": {"ANTHROPIC_API_KEY", "CLAUDE_CODE_OAUTH_TOKEN"},
     "copilot": {"COPILOT_GITHUB_TOKEN"},
 }
+NATIVE_LOGIN_PROVIDERS = frozenset({"claude", "copilot"})
+PROVIDER_ENVIRONMENT_PREFIXES = (
+    "ANTHROPIC_",
+    "CLAUDE_",
+    "OPENAI_",
+    "CODEX_",
+    "COPILOT_",
+    "GH_",
+    "GITHUB_",
+)
 SETUP = Path("/opt/knowledge-agent-pack/.apm/skills/knowledge-setup/scripts")
 TOOL_PROBE = "/opt/proof/container_launch_fixture.py"
+COPILOT_TRANSCRIPT_LIMIT = 8 * 1024 * 1024
 
 
 def clean_parent_environment(environment: dict[str, str]) -> dict[str, str]:
@@ -82,13 +95,41 @@ def native_environment(provider: str, source: str, environment: dict[str, str]) 
     Codex exec consumes CODEX_API_KEY, not an unconfigured OPENAI_API_KEY.
     https://learn.chatgpt.com/docs/non-interactive-mode#use-api-key-auth
     """
-    if source not in AUTH_VARIABLES.get(provider, set()) or not environment.get(source):
+    saved_login = source == "native-login" and provider in NATIVE_LOGIN_PROVIDERS
+    if not saved_login and (
+        source not in AUTH_VARIABLES.get(provider, set()) or not environment.get(source)
+    ):
         raise ValueError("Selected native authentication route is unavailable.")
     result = clean_parent_environment(environment)
-    for name in set().union(*AUTH_VARIABLES.values()):
-        result.pop(name, None)
-    result["CODEX_API_KEY" if provider == "codex" else source] = environment[source]
+    # An explicit saved login must not be silently replaced by an ambient token,
+    # alternate provider, credential helper, home, endpoint or permission mode.
+    for name in tuple(result):
+        if name.startswith(PROVIDER_ENVIRONMENT_PREFIXES):
+            result.pop(name, None)
+    if not saved_login:
+        result["CODEX_API_KEY" if provider == "codex" else source] = environment[source]
     return result
+
+
+def prepare_copilot_settings(home: Path) -> None:
+    """Create fixture defaults without reading or replacing saved native state."""
+    home.mkdir(parents=True, exist_ok=True)
+    try:
+        with (home / "settings.json").open("x") as stream:
+            json.dump(
+                {
+                    "trustedFolders": [str(CONSUMER)],
+                    "autoUpdate": False,
+                    "disableAllHooks": False,
+                    "memory": False,
+                },
+                stream,
+            )
+            stream.write("\n")
+    except FileExistsError:
+        # Existing provider settings may contain login metadata. Do not inspect
+        # or merge them; native evidence will expose any missing trust instead.
+        pass
 
 
 def run(
@@ -192,7 +233,7 @@ def provider_arguments(provider: str, prompt: str) -> list[str]:
                 "--auto-tier",
                 "efficiency",
                 "--max-ai-credits",
-                "10",
+                "30",
                 "--no-ask-user",
                 "--no-auto-update",
                 "--no-remote",
@@ -204,11 +245,23 @@ def provider_arguments(provider: str, prompt: str) -> list[str]:
                 "--allow-tool",
                 f"shell({RUNTIME}/bin/python:*)",
                 "--allow-tool",
+                "shell(command)",
+                "--allow-tool",
+                "shell(agent-knowledge)",
+                "--allow-tool",
                 "read",
                 "--deny-url=*",
                 "--disallow-temp-dir",
                 "--add-dir",
                 str(STATE),
+                "--add-dir",
+                "/opt/proof",
+                "--add-dir",
+                str(RUNTIME),
+                "--add-dir",
+                "/opt/fixture",
+                "--add-dir",
+                "/usr/bin",
                 "--output-format",
                 "json",
                 "--log-level",
@@ -220,25 +273,127 @@ def provider_arguments(provider: str, prompt: str) -> list[str]:
             raise ValueError("Unsupported provider")
 
 
-def native_hooks(provider: str, events: list[dict]) -> dict:
+def copilot_hook_events(home: Path, session: object) -> list[dict]:
+    """Read one bounded native transcript, retaining only selected evidence fields."""
+    if not isinstance(session, str) or str(uuid.UUID(session)) != session:
+        raise ValueError("An exact canonical native session UUID is required.")
+    directory = home / "session-state" / session
+    path = directory / "events.jsonl"
+    if any(p.is_symlink() for p in (home, directory.parent, directory, path)):
+        raise ValueError("Native transcript paths must not follow symbolic links.")
+    if not path.resolve(strict=True).is_relative_to(home.resolve(strict=True)):
+        raise ValueError("Native transcript path escapes the selected provider home.")
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError("Native transcript must be a regular file.")
+        raw = stream.read(COPILOT_TRANSCRIPT_LIMIT + 1)
+    if len(raw) > COPILOT_TRANSCRIPT_LIMIT:
+        raise ValueError("Native transcript exceeds the bounded evidence limit.")
+    selected = []
+    for line in raw.splitlines():
+        event = json.loads(line)
+        if not isinstance(event, dict) or not isinstance(data := event.get("data"), dict):
+            continue
+        kind = event.get("type")
+        if kind == "session.start":
+            detail = {"sessionId": data.get("sessionId")}
+        elif kind in {"hook.start", "hook.end"} and data.get("hookType") in {
+            "sessionStart",
+            "userPromptTransformed",
+        }:
+            detail = {key: data.get(key) for key in ("hookInvocationId", "hookType")}
+            if kind == "hook.start":
+                value = data.get("input")
+                detail["input"] = {
+                    "sessionId": value.get("sessionId") if isinstance(value, dict) else None
+                }
+            else:
+                detail["success"] = data.get("success")
+                value = data.get("output")
+                detail["output"] = (
+                    {
+                        key: value[key]
+                        for key in ("additionalContext", "modifiedTransformedPrompt")
+                        if isinstance(value.get(key), str)
+                    }
+                    if isinstance(value, dict)
+                    else {}
+                )
+        elif kind == "user.message":
+            value = data.get("transformedContent")
+            detail = {"transformedContent": value if isinstance(value, str) else None}
+        else:
+            continue
+        selected.append(
+            {
+                "type": kind,
+                "id": event.get("id"),
+                "parentId": event.get("parentId"),
+                "data": detail,
+            }
+        )
+    starts = [event for event in selected if event["type"] == "session.start"]
+    if len(starts) != 1 or starts[0]["data"].get("sessionId") != session:
+        raise ValueError("Native transcript does not match the exact result session.")
+    return selected
+
+
+def _copilot_hook_contexts(events: list[dict], session: str | None) -> tuple[list, list]:
+    """Require successful invocation, session and transformed-message correlation."""
+    lifecycle, prompt = [], []
+    sessions = [event for event in events if event.get("type") == "session.start"]
+    if not session or len(sessions) != 1 or sessions[0].get("data", {}).get("sessionId") != session:
+        return lifecycle, prompt
+    starts = [event for event in events if event.get("type") == "hook.start"]
+    for event in events:
+        data = event.get("data", {})
+        if (
+            event.get("type") != "hook.end"
+            or data.get("success") is not True
+            or not isinstance(event.get("id"), str)
+            or not event["id"]
+        ):
+            continue
+        invocation = data.get("hookInvocationId")
+        matched = [
+            start
+            for start in starts
+            if isinstance(invocation, str)
+            and invocation
+            and isinstance(start.get("id"), str)
+            and start["id"]
+            and start.get("id") == event.get("parentId")
+            and start.get("data", {}).get("hookInvocationId") == invocation
+            and start["data"].get("hookType") == data.get("hookType")
+            and start["data"].get("input", {}).get("sessionId") == session
+        ]
+        if len(matched) != 1 or not isinstance(output := data.get("output"), dict):
+            continue
+        if data.get("hookType") == "sessionStart":
+            text = output.get("additionalContext")
+            if isinstance(text, str) and session in text:
+                lifecycle.append(text)
+        elif data.get("hookType") == "userPromptTransformed":
+            text = output.get("modifiedTransformedPrompt")
+            if isinstance(text, str) and any(
+                message.get("type") == "user.message"
+                and message.get("parentId") == event.get("id")
+                and message.get("data", {}).get("transformedContent") == text
+                for message in events
+            ):
+                prompt.append(text)
+    return lifecycle, prompt
+
+
+def native_hooks(provider: str, events: list[dict], *, session: str | None = None) -> dict:
     """Only observed provider event channels prove firing, never assistant prose."""
     lifecycle, prompt = [], []
     if provider == "claude":
         lifecycle = [content for _, content in _hook_contexts(events, "SessionStart:startup")]
         prompt = [content for _, content in _hook_contexts(events, "UserPromptSubmit")]
     elif provider == "copilot":
-        for event in events:
-            data = event.get("data", {})
-            if not isinstance(data, dict):
-                continue
-            if event.get("type") == "user.message" and isinstance(
-                data.get("transformedContent"), str
-            ):
-                prompt.append(data["transformedContent"])
-            if event.get("type") == "hook.end" and data.get("hookType") == "sessionStart":
-                output = data.get("output")
-                if isinstance(output, str):
-                    lifecycle.append(output)
+        lifecycle, prompt = _copilot_hook_contexts(events, session)
     # Codex's CLI JSONL does not consistently expose hook events. Do not promote
     # instruction text found in a rollout to a successful native hook firing.
     return {
@@ -250,7 +405,33 @@ def native_hooks(provider: str, events: list[dict]) -> dict:
     }
 
 
+def save_copilot_hook_evidence(
+    home: Path, session: object, destination: Path, secrets: list[str]
+) -> dict:
+    """Export selected native channels only, never the full private transcript."""
+    try:
+        events = copilot_hook_events(home, session)
+    except (OSError, ValueError):
+        return {
+            "lifecycle": "pending",
+            "prompt": "pending",
+            "reason": "Exact-session bounded native hook transcript unavailable or invalid.",
+        }
+    text = "\n".join(json.dumps(event, sort_keys=True) for event in events) + "\n"
+    for secret in filter(None, secrets):
+        text = text.replace(secret, "[redacted]")
+    destination.write_text(_redact(text))
+    report = native_hooks("copilot", events, session=session)
+    report["evidence_path"] = str(destination)
+    return report
+
+
 def _probe_command(command: str, provider: str, phase: str, session: str) -> bool:
+    # Only a bare trailing stderr merge is harmless here. Quotes or escapes
+    # around a literal positional argument must not be normalized into syntax.
+    stripped = command.rstrip()
+    if len(stripped) > 4 and stripped.endswith("2>&1") and stripped[-5].isspace():
+        command = stripped[:-4].rstrip()
     try:
         tokens = shlex.split(command)
     except ValueError:
@@ -637,20 +818,14 @@ def native(provider: str, phase: str, timeout: int, auth_source: str) -> dict:
     directory.mkdir(parents=True, exist_ok=True)
     # Exact fixture-owned project trust only; no user/global home is mounted.
     if provider == "copilot":
-        write_json(
-            Path(parent["COPILOT_HOME"]) / "settings.json",
-            {
-                "trustedFolders": [str(CONSUMER)],
-                "autoUpdate": False,
-                "disableAllHooks": False,
-                "memory": False,
-            },
-        )
+        prepare_copilot_settings(Path(parent["COPILOT_HOME"]))
     prompt = (
-        "Run one bounded container acceptance check. Obtain your exact native session handle "
-        "from the installed hook/native context; never invent one. Use your shell tool to run "
+        "Run one bounded container acceptance check. Copy the Provider session ID supplied by "
+        "the installed hook verbatim; that is your native session handle. Do not look for a "
+        "different environment ID. Never invent an ID. Use your shell tool to run "
         f"{RUNTIME}/bin/python {TOOL_PROBE} --provider {provider} --phase {phase} "
-        "--session-id YOUR_EXACT_SESSION_HANDLE. This trusted fixture probe tests selected-profile "
+        "--session-id YOUR_EXACT_PROVIDER_SESSION_ID. The fixture performs describe, context, "
+        "doctor and knowledge discovery itself. This trusted fixture probe tests selected-profile "
         "retrieval, write doctor, synthetic credential presence and fixture signal cleanup. "
         "Do not change files or configuration yourself; do not read credentials or invoke models. "
         "Do not schedule, compound real inputs, publish, install tools or widen permissions. "
@@ -687,6 +862,16 @@ def native(provider: str, phase: str, timeout: int, auth_source: str) -> dict:
     evidence["probe_execution"] = native_probe_executed(
         provider, events, phase, str(evidence.get("session_id", ""))
     )
+    hooks = (
+        save_copilot_hook_evidence(
+            Path(parent["COPILOT_HOME"]),
+            evidence.get("session_id"),
+            directory / f"{phase}-hooks.jsonl",
+            secrets,
+        )
+        if provider == "copilot"
+        else native_hooks(provider, events)
+    )
     # Do not retain final prose, arbitrary tool arguments or credentials in the report.
     report = {
         "status": "pending",
@@ -696,7 +881,7 @@ def native(provider: str, phase: str, timeout: int, auth_source: str) -> dict:
         "native_exit": result.returncode,
         "session_id": evidence.get("session_id"),
         "log": str(log),
-        "hooks": native_hooks(provider, events),
+        "hooks": hooks,
         "trust": "isolated fixture project only; actual firing reported independently",
         "launch_argv": command[: -len(provider_arguments(provider, prompt))],
         "parent_target_absent": TARGET_VARIABLE not in parent,

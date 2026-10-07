@@ -115,6 +115,37 @@ including native tool-sandbox write access and fresh/reused container paths.
 APM upgrades can restore marker commands, so repeat installation and binding
 with the same mode. Preserve unrelated hooks and repository-owned checks.
 
+## Provider trust and delivery
+
+This check applies to absolute bindings too. Keep four facts separate: package
+registration, trusted project/config discovery, approval of the current hook
+definitions, and actual lifecycle/prompt delivery. Setup, `doctor` and a working
+credential launcher do not establish all four.
+
+Codex CLI 0.160.1 requires separate review of each non-managed hook definition,
+even when its project is trusted and the hook is enabled. After final binding,
+open `/hooks` in that consumer's native CLI session. Review the package entries'
+source paths and commands, then trust those exact definitions through the native
+interface within the existing authorization. Preserve unrelated hook choices.
+Do not auto-trust during setup, fabricate provider trust records or use a
+hook-trust bypass to make acceptance pass. A new or changed definition requires
+review again; unchanged repeat binding does not by itself require new approval.
+Check the installed version's supported behavior rather than assuming every
+Codex release or provider uses this trust model. See the provider's
+[hook trust documentation](https://learn.chatgpt.com/docs/hooks#review-and-trust-hooks).
+
+For Codex 0.160.1, the native app-server `hooks/list` response exposes each
+definition's `sourcePath`, `key`, `currentHash`, `enabled` and `trustStatus`.
+Use it to distinguish an enabled-but-untrusted entry from an approved one;
+the native `/hooks` browser owns the review action. After approval, start a fresh
+session and verify both `SessionStart` and `UserPromptSubmit`. App-server
+`hook/started` and `hook/completed` notifications expose the run's source,
+event, status, context entries and thread/turn identity. Retain bounded evidence
+that the package reminder reached the native context with the actual session
+handle. Registration, generated instructions, assistant echoes or a session ID
+read from the environment alone are not hook-delivery evidence. If the harness
+does not expose enough evidence, report delivery unverified rather than infer it.
+
 ## Linux containers and host mounts
 
 A Linux container on Windows uses Linux Python and `fcntl`; it does not require

@@ -5,9 +5,10 @@ This extends the [local-compounding candidate](local-compounding-proof.md) on th
 same branch. The previous feature is preserved in `f0186a1`; implementation slices
 are `e8859ce` (preflight), `67af72a` (private profile preparation), `ddf33fe`
 (owned setup and checked launches), `62ef1ed` (review fixes) and `27cd6e9`
-(acceptance driver and failure evidence). The subsequent authorized Docker
-retest proves Codex tool execution, retrieval, writes and credential activation;
-native container acceptance is still partial for the limits below. No consumer installation
+(acceptance driver and failure evidence). The authorized Docker
+retest proves Codex tool execution, retrieval, writes and credential activation.
+The later native trust/login follow-up below establishes additional provider
+coverage; remaining limits are reported separately. No consumer installation
 or publication is part of this work.
 
 ## Developer-facing change
@@ -104,7 +105,8 @@ credential-write and explicit read-only launch checks as **unverified** and keep
 native acceptance partial. Canonical fixture write denial alone is not complete
 sandbox coverage. The subsequent authorized Docker retest supplies these checks through the actual
 Codex sandbox helper. The original driver reports remain unchanged, with this
-separate evidence clearly identified; native hook delivery is still unverified.
+separate evidence clearly identified; the follow-up below now supplies native
+hook-delivery evidence too.
 
 The semantic review confirmed preservation of explicit profile overrides/defaults,
 local skills, instruction ownership, strict activation, publication boundaries,
@@ -114,14 +116,17 @@ native execution in the developer's environment.
 
 ## Results and limits
 
-The final deterministic suite passed **1,825 tests in 64.30 seconds**. Ruff,
+The final deterministic suite passed **1,871 tests in 68.06 seconds**; the
+affected container-driver suite also passed **84 tests** after the last
+fixture-permission adjustment. Ruff,
 formatting, mypy (57 source files), whitespace checks, skill validation and
 wheel/source builds passed. The isolated fresh-consumer check passed actual
 APM installation/compilation/audit, all three targets, source/resource parity,
 staged prepare/bind, credential readiness/activation fixtures, hook ownership,
 reinstall/rebind, signals and guarded cleanup.
 
-Evidence is in `.cache/container-launch-proof/`: `pytest-seccomp-final-trust.txt`,
+Evidence is in `.cache/container-launch-proof/`: `pytest-native-hooks-final.txt`,
+`pytest-native-hooks-focused.txt`,
 `ruff-seccomp-final.txt`, `format-seccomp-final.txt`, `mypy-seccomp-final.txt`, `skill-final.txt`,
 `build-final.txt`, `fresh-consumer-final.json` and its `.log`.
 One earlier full run had two detector classification failures; a repeat passed
@@ -204,12 +209,13 @@ not attempt data writes or receipt-producing retrieval. Canonical-file denial
 also has an image-ownership constraint, reported separately. These are actual
 native sandbox API checks, not model/session or hook evidence.
 
-Hook delivery remains unverified. Native saved messages did not supply the
+At this earlier checkpoint, hook delivery remained unverified. Native saved messages did not supply the
 exact installed lifecycle/prompt reminders; successful probes obtained their
 session IDs from native environment variables. Registration, project trust and
-tool success do not substitute for native hook-delivery evidence. Claude and
-Copilot still lack designated container authentication; Windows-host mount and
-direct container-local writable-runtime provisioning proof remain outstanding.
+tool success do not substitute for native hook-delivery evidence. At that time,
+Claude and Copilot lacked designated container authentication and direct
+writable-runtime provisioning had not been tested. The follow-up below
+supersedes those gaps; Windows-host mount proof remains unavailable.
 
 Evidence: `.cache/container-launch/seccomp-verified/report.json`, its native
 transcripts/tool reports, `sandbox-helper.json`, `prepare-recreated.json`,
@@ -312,3 +318,125 @@ fixtures do not establish it. Missing provider authentication, native trust,
 hook firing and sandbox proof are reported separately. Host-native compounding
 proof from the previous feature is not authenticated-in-container proof.
 Native scheduling tests remain paused.
+
+
+## Native hook trust and container-login follow-up (2026-10-07)
+
+The installed runtime and hook implementation did not require a change. The
+Codex gap was separate approval of each exact hook definition: native
+`hooks/list` reported the two package entries enabled but `untrusted`, despite
+project trust. Native `/hooks` review approved only those two entries, preserved
+their current hashes, and left the unrelated inert fixture hooks untrusted.
+No bypass, forged trust state or replacement hook was used. The setup skill now
+owns the concrete procedure and distinguishes registration, project trust,
+current-definition approval and actual delivery.
+
+A fresh Codex 0.160.1 app-server thread through the generated launcher emitted
+matched `hook/started` and successful `hook/completed` notifications for both
+`sessionStart` and `userPromptSubmit`. The native rollout contains each exact
+reminder as a `hooks.additional_context` developer message with the correct
+session ID. The model completed the bounded acknowledgement. This is direct
+native delivery proof, separate from the earlier successful model-tool runs.
+
+The fixture's TUI approval used the documented custom-provider `env_key` route
+with the same explicitly selected OpenAI API key and official API endpoint,
+without saving the key in auth/config files. It made no model call during trust
+review. The subsequent app-server proof used that same route. No host home or
+Keychain was mounted or exported. Evidence is under
+`.cache/container-launch/hook-trust-proof/`: `initial-hook-trust.json`,
+`after-trust-list.json`, `native-events.jsonl`, `native-rollout.jsonl`,
+`verified-hook-delivery.json` and the reproducible isolated `native_delivery.py`.
+The exact session is `01a114a6-96a2-77c0-aeb3-2e4b31eea689`.
+
+The owner then completed the providers' native browser/device login flows inside
+the container. Host login alone had not established container authentication.
+The acceptance driver now permits an explicit `native-login` source for Claude
+and Copilot, strips ambient provider/GitHub credentials and configuration
+redirects, and preserves native login/settings files. No implicit fallback or
+credential extraction is supported. Login files remain only in the fixture's
+persistent home; they are excluded from exported evidence.
+
+### Writable-runtime provisioning
+
+A new isolated Linux directory exercised the unchanged supported setup helper
+with `--runtime-mode install --apm-mode prepare`, then repeated that operation
+against the same venv. A third `--runtime-mode existing` invocation verified the
+exact supplied-wheel payload. All passed, with the same venv marker inode and
+read/write/receipt readiness. This closes the direct writable-runtime gap in
+addition to the earlier Debian/Alpine immutable-runtime proof.
+
+The test bootstrapped uv 0.10.3 (matching the host version) from its official
+Linux aarch64 PyPI wheel into the disposable directory, using the image's pip.
+Setup used local supplied wheels, no Python download or shared cache changes.
+The test retained over 112 MiB free disk space. No consumer, shared profile,
+credential or automation state was changed. Reports and exact commands are in
+`.cache/container-launch/writable-runtime-proof/summary.json` and `report.json`.
+
+
+### Native provider evidence and verifier corrections
+
+Claude Code 2.1.236 passed retrieval, correlated receipts, write-mode doctor,
+synthetic profile-credential activation, signal capture/guarded cleanup and
+source-write denial. Both startup and prompt hooks delivered their reminders.
+Fresh session: `13c789b1-ea2e-4224-91f8-efd2be90bd9f`; repeated session:
+`4d541149-7eac-4a2e-8b42-a25a3ca3fee0`. The repeated tool command included a bare
+`2>&1`; the strict verifier initially rejected that suffix. A narrow parser fix
+accepts only the stderr merge and rejects quoted positional values and other
+shell suffixes. Rechecking the unchanged transcript and proof passed without
+another model call. Evidence: `claude-fresh-result.json`,
+`claude-reused-reverified.json` and `claude/` under the hook-trust evidence root.
+
+Copilot CLI 1.0.86 emitted both native hook results, but omitted startup events
+from its public stdout stream. Its exact native session transcript contains
+correlated `hook.start`/`hook.end` events with successful structured output.
+The driver now validates session, invocation and event-parent identities and
+exports only selected hook/context fields to `<phase>-hooks.jsonl`; missing,
+malformed, oversized or mismatched native evidence stays unverified. It never
+reads provider credential configuration or exports opaque model fields from
+that transcript. Session `66366dde-c936-4b5a-9087-b9c75bb4c33e` proves both hooks.
+
+Copilot fixture-only corrections use its supported minimum 30-credit cap,
+correct shell permissions, the required fixture/runtime read paths,
+and unambiguous instructions to copy the hook's Provider session ID. Failed
+attempts are retained under `copilot/` by prerequisite, including the original
+credit-limit failure, denied discovery and Python commands, and session-wording
+confusion. These are acceptance-driver fixes, not sandbox bypasses or changes
+to the distributed runtime.
+
+Final checks: `.cache/container-launch-proof/pytest-native-hooks-final.txt`,
+`pytest-native-hooks-focused.txt`, `ruff-native-hooks-final.txt`,
+`format-native-hooks-final.txt`, `mypy-native-hooks-final.txt`,
+`build-hooks-final.txt`, and `fresh-consumer-hooks-final.json`. The fresh-consumer
+run confirms source/deployed resource parity, owned APM sequencing, hook rebinding,
+blank-credential readiness and repeat setup. The one consolidated review round
+remains the only review; these additional checks are affected verification.
+
+
+The final Copilot tool acceptance also passed retrieval, correlated receipts,
+write-mode doctor, clean-parent synthetic credential activation, signal capture
+and guarded cleanup, and source-write denial. Fresh session:
+`7db0b0c1-09fd-4fd4-be15-9fec5904dcd5`; repeated session:
+`cf4a2362-2d1a-4147-bec6-168b90c9e8ef`. Both delivered startup and prompt hooks.
+The last path denial was the venv interpreter symlink resolving to
+`/usr/bin/python3.13`: the fixture's permission paths included the venv but not
+the resolved interpreter. Native permission events identified this path request.
+The fixture now permits the necessary image runtime directory with the exact
+Python command rule; no allow-all-paths/tools/URLs flag is used. A short attempt
+with an incorrect runtime-directory assumption was stopped before accepting any
+proof, then retried with the observed resolved path.
+
+Evidence: `copilot-fresh-result.json`, `copilot-reused-result.json`, and the
+`copilot/` transcripts, selected hook evidence and tool reports under
+`.cache/container-launch/hook-trust-proof/`. `final-state-checkpoint.json` and
+`final-rebind.json` record preserved populated state and unchanged repeat binding.
+The fixture container is stopped after verification; its persistent volume,
+provider-owned logins and evidence are retained. No actual consumer installation,
+profile/automation change, remote publication or additional review round occurred.
+
+Remaining limits are explicit: actual Windows-host mounts were not available;
+dedicated private-credential write denial and explicit read-only launch proof
+were completed for Codex only, not Claude/Copilot. Their native driver results
+therefore remain `partial` despite the verified retrieval/write/credential/hook
+results. Provider support on Alpine is not inferred from Python-runtime tests.
+Native scheduling tests remain paused. This follow-up adds no distributed image,
+Dockerfile, scheduler, separate hook or new compounding state store.

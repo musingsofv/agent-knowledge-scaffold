@@ -248,7 +248,7 @@ def test_native_hook_proof_rejects_assistant_echo_and_keeps_registration_separat
         assert result["lifecycle"] == result["prompt"] == "pending"
     native = [{"type": "user.message", "data": {"transformedContent": "task " + driver.REFLECTION}}]
     result = driver.native_hooks("copilot", native)
-    assert result["prompt"] == "passed" and result["lifecycle"] == "pending"
+    assert result["prompt"] == result["lifecycle"] == "pending"
 
 
 def test_persistent_snapshot_detects_bytes_and_lock_identity_without_following_links(
@@ -402,3 +402,311 @@ def test_native_auth_does_not_forward_other_provider_credentials(driver):
         },
     )
     assert result == {"ANTHROPIC_API_KEY": "selected-fixture"}
+
+
+@pytest.mark.parametrize("provider", ["claude", "copilot"])
+def test_explicit_native_login_strips_tokens_and_known_provider_overrides(driver, provider):
+    clean = {"HOME": "/fixture/home", "PATH": "/fixture/bin", "TERM": "xterm"}
+    overrides = {
+        "ANTHROPIC_API_KEY",
+        "ANTHROPIC_AUTH_TOKEN",
+        "ANTHROPIC_BASE_URL",
+        "ANTHROPIC_PROFILE",
+        "CLAUDE_CODE_OAUTH_TOKEN",
+        "CLAUDE_CODE_OAUTH_REFRESH_TOKEN",
+        "CLAUDE_CODE_USE_BEDROCK",
+        "CLAUDE_CONFIG_DIR",
+        "OPENAI_API_KEY",
+        "OPENAI_BASE_URL",
+        "CODEX_API_KEY",
+        "CODEX_HOME",
+        "COPILOT_GITHUB_TOKEN",
+        "COPILOT_PROVIDER_API_KEY",
+        "COPILOT_PROVIDER_API_KEY_COMMAND",
+        "COPILOT_PROVIDER_BASE_URL",
+        "COPILOT_HOME",
+        "COPILOT_ALLOW_ALL",
+        "GH_TOKEN",
+        "GH_HOST",
+        "GH_CONFIG_DIR",
+        "GITHUB_TOKEN",
+        "GITHUB_API_URL",
+    }
+    original = {**clean, **dict.fromkeys(overrides, "synthetic-unrelated")}
+    assert driver.native_environment(provider, "native-login", original) == clean
+    assert original["COPILOT_GITHUB_TOKEN"] == "synthetic-unrelated"
+
+
+@pytest.mark.parametrize("source", [None, "", "auto", "saved-login", "ANTHROPIC_API_KEY"])
+def test_available_saved_login_does_not_make_auth_selection_implicit(driver, tmp_path, source):
+    saved = tmp_path / ".claude/.credentials.json"
+    saved.parent.mkdir()
+    saved.write_text('{"fictional": "saved-login"}')
+    with pytest.raises(ValueError, match="route is unavailable"):
+        driver.native_environment("claude", source, {"HOME": str(tmp_path)})
+
+
+@pytest.mark.parametrize("provider", ["codex", "unknown"])
+def test_native_login_cannot_expand_supported_provider_routes(driver, provider):
+    with pytest.raises(ValueError, match="route is unavailable"):
+        driver.native_environment(provider, "native-login", {})
+    with pytest.raises(ValueError):
+        driver.auth_routes(["claude:native-login"], {})
+
+
+def test_copilot_defaults_preserve_existing_settings_and_login_without_reading(
+    driver, tmp_path, monkeypatch
+):
+    settings = tmp_path / "settings.json"
+    login = tmp_path / "config.json"
+    settings.write_text('{"fixtureNativeSettings": true}\n')
+    login.write_text('{"fixtureNativeLogin": true}\n')
+    before = {p: (p.stat().st_ino, p.stat().st_mtime_ns, p.read_bytes()) for p in (settings, login)}
+    original_open = Path.open
+
+    def no_native_reads(path, mode="r", *args, **kwargs):
+        if path in (settings, login) and mode != "x":
+            pytest.fail("The driver attempted to read or overwrite provider-owned state")
+        return original_open(path, mode, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", no_native_reads)
+        driver.prepare_copilot_settings(tmp_path)
+    assert before == {p: (p.stat().st_ino, p.stat().st_mtime_ns, p.read_bytes()) for p in before}
+
+
+def test_copilot_defaults_only_trust_fixture_when_no_settings_exist(driver, tmp_path):
+    home = tmp_path / "native"
+    driver.prepare_copilot_settings(home)
+    value = json.loads((home / "settings.json").read_text())
+    assert value == {
+        "trustedFolders": [str(driver.CONSUMER)],
+        "autoUpdate": False,
+        "disableAllHooks": False,
+        "memory": False,
+    }
+    assert not (home / "config.json").exists()
+
+
+@pytest.mark.parametrize("provider", ["claude", "copilot"])
+def test_native_login_cli_is_an_explicit_inside_only_choice(driver, monkeypatch, capsys, provider):
+    calls = []
+
+    def native(selected, phase, timeout, source):
+        calls.append((selected, phase, timeout, source))
+        return {"status": "pending", "authentication_source": source}
+
+    monkeypatch.setattr(driver, "native", native)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(SCRIPT),
+            "--inside",
+            "native",
+            "--provider",
+            provider,
+            "--phase",
+            "fresh",
+            "--auth-source",
+            "native-login",
+        ],
+    )
+    assert driver.main() == 0
+    assert calls == [(provider, "fresh", 300, "native-login")]
+    assert json.loads(capsys.readouterr().out)["authentication_source"] == "native-login"
+
+
+SESSION = "1a8f31a8-4254-42ae-9da4-0482d1b04836"
+
+
+def copilot_hooks(driver):
+    context = "Run agent-knowledge describe. Provider session ID: " + SESSION
+    transformed = "Fixture request. " + driver.REFLECTION
+    return [
+        {"type": "session.start", "id": "session", "data": {"sessionId": SESSION}},
+        {
+            "type": "hook.start",
+            "id": "start",
+            "data": {
+                "hookInvocationId": "startup-invocation",
+                "hookType": "sessionStart",
+                "input": {"sessionId": SESSION, "initialPrompt": "never-copy-input"},
+            },
+        },
+        {
+            "type": "hook.end",
+            "id": "end",
+            "parentId": "start",
+            "data": {
+                "hookInvocationId": "startup-invocation",
+                "hookType": "sessionStart",
+                "success": True,
+                "output": {"additionalContext": context, "opaque": "never-copy-output"},
+            },
+        },
+        {
+            "type": "hook.start",
+            "id": "transform-start",
+            "data": {
+                "hookInvocationId": "transform-invocation",
+                "hookType": "userPromptTransformed",
+                "input": {"sessionId": SESSION},
+            },
+        },
+        {
+            "type": "hook.end",
+            "id": "transform-end",
+            "parentId": "transform-start",
+            "data": {
+                "hookInvocationId": "transform-invocation",
+                "hookType": "userPromptTransformed",
+                "success": True,
+                "output": {"modifiedTransformedPrompt": transformed},
+            },
+        },
+        {
+            "type": "user.message",
+            "id": "user",
+            "parentId": "transform-end",
+            "data": {"transformedContent": transformed, "content": "never-copy-raw-user"},
+        },
+        {"type": "assistant.message", "data": {"reasoning": "never-copy-reasoning"}},
+    ]
+
+
+def write_copilot_transcript(driver, home):
+    path = home / "session-state" / SESSION / "events.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_text("\n".join(json.dumps(event) for event in copilot_hooks(driver)) + "\n")
+    return path
+
+
+def test_copilot_native_transcript_correlates_success_and_exports_only_selected_fields(
+    driver, tmp_path
+):
+    home = tmp_path / "copilot"
+    write_copilot_transcript(driver, home)
+    destination = tmp_path / "fresh-hooks.jsonl"
+    result = driver.save_copilot_hook_evidence(home, SESSION, destination, ["Fixture request."])
+    assert result["lifecycle"] == result["prompt"] == "passed"
+    assert result["evidence_path"] == str(destination)
+    text = destination.read_text()
+    assert "never-copy" not in text and "Fixture request." not in text
+    assert "[redacted]" in text and SESSION in text and "additionalContext" in text
+    assert {json.loads(line)["type"] for line in text.splitlines()} == {
+        "session.start",
+        "hook.start",
+        "hook.end",
+        "user.message",
+    }
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["session", "invocation", "parent", "failed", "foreign-input", "no-start", "no-id", "string"],
+)
+def test_copilot_startup_needs_exact_successful_native_invocation(driver, fault):
+    trace = copilot_hooks(driver)
+    if fault == "session":
+        trace[0]["data"]["sessionId"] = "another-session"
+    elif fault == "invocation":
+        trace[2]["data"]["hookInvocationId"] = "another-invocation"
+    elif fault == "parent":
+        trace[2]["parentId"] = "another-parent"
+    elif fault == "failed":
+        trace[2]["data"]["success"] = False
+    elif fault == "foreign-input":
+        trace[1]["data"]["input"]["sessionId"] = "another-session"
+    elif fault == "no-start":
+        trace.pop(1)
+    elif fault == "no-id":
+        trace[1].pop("id")
+        trace[2].pop("parentId")
+    else:
+        trace[2]["data"]["output"] = "agent-knowledge describe " + SESSION
+    assert driver.native_hooks("copilot", trace, session=SESSION)["lifecycle"] == "pending"
+
+
+@pytest.mark.parametrize("fault", ["failed", "parent", "content", "missing-user", "wrong-session"])
+def test_copilot_prompt_needs_success_and_actual_transformed_message(driver, fault):
+    trace = copilot_hooks(driver)
+    if fault == "failed":
+        trace[4]["data"]["success"] = False
+    elif fault == "parent":
+        trace[5]["parentId"] = "another-end"
+    elif fault == "content":
+        trace[5]["data"]["transformedContent"] += "different"
+    elif fault == "missing-user":
+        trace.pop(5)
+    else:
+        trace[3]["data"]["input"]["sessionId"] = "another-session"
+    assert driver.native_hooks("copilot", trace, session=SESSION)["prompt"] == "pending"
+
+
+@pytest.mark.parametrize("session", [None, "", "../config", "/credentials", SESSION.upper()])
+def test_copilot_transcript_rejects_noncanonical_ids_before_reading(driver, tmp_path, session):
+    with pytest.raises(ValueError):
+        driver.copilot_hook_events(tmp_path, session)
+
+
+@pytest.mark.parametrize("fault", ["wrong-session", "oversize", "symlink", "missing", "malformed"])
+def test_copilot_unavailable_or_unbounded_transcript_never_promotes_hook_proof(
+    driver, tmp_path, monkeypatch, fault
+):
+    home = tmp_path / "copilot"
+    path = write_copilot_transcript(driver, home)
+    if fault == "wrong-session":
+        path.write_text(path.read_text().replace(SESSION, "another-session"))
+    elif fault == "oversize":
+        monkeypatch.setattr(driver, "COPILOT_TRANSCRIPT_LIMIT", 20)
+    elif fault == "symlink":
+        external = tmp_path / "private-native-file"
+        path.rename(external)
+        path.symlink_to(external)
+    elif fault == "missing":
+        path.unlink()
+    else:
+        path.write_text("invalid-json\n")
+    destination = tmp_path / "hooks.jsonl"
+    result = driver.save_copilot_hook_evidence(home, SESSION, destination, [])
+    assert result["lifecycle"] == result["prompt"] == "pending"
+    assert not destination.exists()
+
+
+@pytest.mark.parametrize("suffix", [" 2>&1", "\t2>&1  "])
+def test_exact_probe_allows_bare_trailing_stderr_merge(driver, suffix):
+    command = (
+        f"{driver.RUNTIME}/bin/python {driver.TOOL_PROBE} "
+        "--provider claude --phase reused --session-id native"
+    )
+    assert driver._probe_command(command + suffix, "claude", "reused", "native")
+    assert driver._probe_command(
+        "/bin/bash -c '" + command + suffix + "'", "claude", "reused", "native"
+    )
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [' "2>&1"', " '2>&1'", r" \2\>\&1", " 2>/tmp/log", " 2>&1; true", " 2>&1 2>&1"],
+)
+def test_probe_never_confuses_positional_text_or_shell_suffix_with_stderr_merge(driver, suffix):
+    command = (
+        f"{driver.RUNTIME}/bin/python {driver.TOOL_PROBE} "
+        "--provider claude --phase reused --session-id native"
+    )
+    assert not driver._probe_command(command + suffix, "claude", "reused", "native")
+
+
+def test_copilot_permissions_use_exact_executable_names_and_fixture_read_directories(driver):
+    arguments = driver.provider_arguments("copilot", "fixture")
+    allowed = [
+        arguments[i + 1] for i, value in enumerate(arguments[:-1]) if value == "--allow-tool"
+    ]
+    assert "shell(command)" in allowed and "shell(agent-knowledge)" in allowed
+    assert "shell(command -v agent-knowledge)" not in allowed
+    directories = [
+        arguments[i + 1] for i, value in enumerate(arguments[:-1]) if value == "--add-dir"
+    ]
+    assert directories == [str(driver.STATE), "/opt/proof", str(driver.RUNTIME), "/opt/fixture"]
+    assert "--deny-url=*" in arguments and "--disable-builtin-mcps" in arguments

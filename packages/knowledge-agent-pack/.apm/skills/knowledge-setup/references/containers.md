@@ -202,15 +202,22 @@ Run in a fresh actual harness session through the configured launch route:
    route with mapped targets removed from the test parent. Keep provider login
    separate. Never print, transform or hash values. Blanks remain pending;
    profiles without credentials report this step not applicable.
-4. Observe registration, native trust where exposed, and actual lifecycle plus
-   prompt-hook delivery separately. Enabled registration or echoed instruction
-   text is insufficient. Retain bounded real-event evidence. Do not grant trust
-   automatically; registration/regeneration changes can invalidate prior trust.
+4. Follow [Provider trust and delivery](portable-hooks.md#provider-trust-and-delivery)
+   after final binding. Observe registration, project trust, approval of the
+   current hook definitions and actual lifecycle/prompt delivery separately.
+   Codex CLI 0.160.1 needs native `/hooks` review beyond project trust; preserve
+   that provider-owned state in the intended container home and review changed
+   definitions again. Enabled registration or echoed instruction text is
+   insufficient. Retain bounded real-event evidence; do not auto-grant trust.
 5. Inspect effective sandbox policy. Where authorized, configure only required
    signal/usage/private-state paths through the consumer's real settings,
    preserving comments/unrelated settings and native overrides. Verify actual
    native policy rather than flags alone; retain intended source/credential
-   access and explicit read-only choices. Do not disable sandbox protections.
+   access and explicit read-only choices. When a permitted command still fails,
+   inspect the native permission reason and resolve its executable path: a venv
+   interpreter may point outside the allowed venv directory. Include only the
+   required resolved runtime paths through the consumer's authorized policy;
+   do not infer that a shell permission grants path access or disable protections.
 6. Repeat launch in the existing container and preparation/bind for idempotence.
    Recreate a disposable container against the same persistent storage to check
    history, signal/receipt routes and locks. Do not interrupt real sessions or

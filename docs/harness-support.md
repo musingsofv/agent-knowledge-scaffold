@@ -68,7 +68,17 @@ credential activation, hooks and outstanding sandbox/Windows-host coverage.
 ## Setup readiness boundaries
 
 Runtime/read, signal/receipt writes, hooks, profile credentials and automation
-are reported separately. If knowledge reads are ready and only profile
+are reported separately. Hook registration, project trust, approval of the exact
+hook definition and observed lifecycle/prompt delivery are separate facts.
+In Codex CLI 0.160.1, an enabled project hook can remain untrusted after successful
+binding and project approval. Complete native `/hooks` review for the current
+package definitions, then verify delivery in a fresh session. Changed definitions
+need review again. Follow the setup skill's
+[provider trust procedure](../packages/knowledge-agent-pack/.apm/skills/knowledge-setup/references/portable-hooks.md#provider-trust-and-delivery);
+this version-specific prerequisite does not invalidate historical live proof or
+establish the same trust mechanism for other providers/releases.
+
+If knowledge reads are ready and only profile
 environment diagnostics remain, setup can bind discovery/reflection hooks with
 credentials pending. Doctor still reports those diagnostics and fails overall;
 setup does not offer a credential loader command. `prepare` intentionally leaves
@@ -139,8 +149,9 @@ owns the acceptance and change-invalidation procedure.
   coordination/metadata only, performs no model/network/body work and does not
   wait on a busy lifecycle lock. Only an atomically eligible worker may start
   compounding; reminder delivery never reserves a run.
-- Codex project hooks remain subject to Codex's project-trust boundary. Setup
-  can install the hook but cannot silently grant that trust.
+- Codex project hooks remain subject to project trust and, in CLI 0.160.1,
+  separate trust of the current hook definition. Setup binds registrations;
+  it does not grant either trust or prove native delivery.
 - The Copilot launcher enables Copilot's Bash-environment preference. Copilot
   persists that value-free preference; the temporary activation file and
   credential values are not stored in its settings.

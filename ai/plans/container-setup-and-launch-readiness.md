@@ -1,7 +1,7 @@
 # Existing-container setup and launch readiness
 
 Date: 2026-10-06
-Status: Implementation complete; deterministic and runtime checks passed; native container acceptance remains partial.
+Status: Implementation complete; native retrieval/activation/hooks verified for all three providers; remaining platform and sandbox proof limits are explicit.
 Owner: Agent Knowledge Scaffold, primarily the `knowledge-setup` skill.
 Baseline: `f0186a1` on `nik/local-compounding-hooks`, preserving the previous
 local-compounding candidate based on `c2e6d875a68d165e3d94870c5040980625ac9451`.
@@ -354,14 +354,14 @@ Primary authored surfaces:
   on Linux alone or modifying the wrong environment.
 - [x] **AC2:** Developer retains image, runtime user, tools and launcher. No
   distributed Docker image or required Dockerfile/devcontainer/Compose project.
-- [ ] **AC3:** Both immutable image runtime and explicit container-local
+- [x] **AC3:** Both immutable image runtime and explicit container-local
   provisioning work, preserve supported Python, and verify exact package parity.
 - [x] **AC4:** Selected profile resolves every relevant path inside the target
   environment, preserving relative bases, defaults and explicit user overrides.
 - [x] **AC5:** Private projection is guarded, atomic and repeatable, with tested
   refresh/removal and interruption/concurrency behaviour. Runtime credential
   validation is unchanged; originals and unrelated profiles survive.
-- [ ] **AC6:** Exact provider launch actions carry the intended environment and
+- [x] **AC6:** Exact provider launch actions carry the intended environment and
   original argument semantics on fresh and reused container routes.
 - [x] **AC7:** Preflight reports independent readiness and specific remediation;
   ordinary launch performs no install, APM compile/rebind, model call or compound.
@@ -369,9 +369,9 @@ Primary authored surfaces:
   generated outputs and final/index checks survive installation and rebinding.
 - [x] **AC9:** One actual-launcher acceptance sequence proves selected retrieval
   and receipts/signals in the harness's effective sandbox, not only Docker exec.
-- [ ] **AC10:** Credential activation is verified without ambient false positives
+- [x] **AC10:** Credential activation is verified without ambient false positives
   or secret output; blanks and unavailable activation remain visibly pending.
-- [ ] **AC11:** Native registration, trust and firing are distinguished for
+- [x] **AC11:** Native registration, trust and firing are distinguished for
   Codex, Claude and Copilot. Regeneration/upgrade invalidates affected proof.
 - [x] **AC12:** Persistent state and lock coordination survive reuse/recreation;
   private credential lifecycle does not reset signals, sessions or activity.
@@ -424,61 +424,58 @@ implemented but lack the complete live coverage in their wording.
 | Criteria | Result and evidence |
 | --- | --- |
 | AC1, AC2 | Setup skill and container reference give concrete read-only location checks and preserve the developer's image/tools. Detection and route fixtures pass; test images are confined to e2e fixtures. |
-| AC3 | Partial: exact-wheel immutable Debian/Alpine runtime proof passes. Writable provisioning passes on the host and in deterministic tests; direct container-local provisioning is not yet exercised. |
+| AC3 | Passed: exact-wheel immutable Debian/Alpine runtime proof and direct Linux writable install/reuse/existing-mode payload verification. See `.cache/container-launch/writable-runtime-proof/summary.json`. |
 | AC4, AC5 | Path-base/default/override, guarded projection, interruption/concurrency, refresh/removal and strict-credential regression tests pass. |
-| AC6 | Partial across providers: generated actions, argv/environment fixtures and all three CLI startups pass. Codex tool-level environment and retrieval proof passes in fresh/reused/recreated containers after the authorized seccomp adjustment. Claude/Copilot model authentication remains unavailable. |
+| AC6 | Passed for the selected Linux image: Codex fresh/reused/recreated tool proof and Claude/Copilot fresh/reused tool proof through generated launch actions. Native logins are explicitly selected and separate from profile credentials. |
 | AC7 | Preflight failure/readiness tests pass with bounded probes and no routine installation, compilation, rebind, model invocation or compounding. |
 | AC8 | Fresh-consumer checks cover targets, local skills, owned prepare/install/compile/bind and generated-source parity. Native container tests preserve all three targets and repeat binding. Real consumers were not modified; their own final/index gates remain authoritative. |
-| AC9 | Passed for the selected Codex route: actual model tool calls through the generated launcher prove retrieval, correlated receipts, signals and guarded cleanup in fresh/reused/recreated containers. See the authorized Docker retest. |
-| AC10 | Partial across providers: strict blanks, activation/redaction and clean-parent fixtures pass. Codex actual model tools prove mapped canary activation without an ambient target; Claude/Copilot live container authentication remains unavailable. |
-| AC11 | Partial: registration/rebind and distinct trust/firing reporting pass. Actual lifecycle/prompt delivery is unverified in the container for all three providers. |
+| AC9 | Passed: all three actual harness tool routes prove selected retrieval, correlated receipts, signals and guarded cleanup; native session handles match their saved evidence. |
+| AC10 | Passed: actual model tools in all three providers verify clean-parent synthetic profile activation without values in proof; strict blanks/pending/redaction regressions also pass. |
+| AC11 | Passed for Codex 0.160.1, Claude 2.1.236 and Copilot 1.0.86: actual native lifecycle/prompt events and delivered context. Codex exact-definition trust is separately approved/verified through native interfaces; changed definitions require reapproval. See the native hook-trust follow-up. |
 | AC12 | Debian/Alpine runtime tests prove state/lock persistence and concurrent receipts. The authorized Codex retest additionally preserves 16 populated signal/receipt/coordination files across recreation, including hashes/inode identities, and repeat binding passes. |
 | AC13 | Source review and regressions preserve overrides. The generated launcher plus native Codex sandbox helper verifies private-file write denial and explicit read-only roots; actual model tools verify source denial. Operator-authorized Docker changes are per-container, with no daemon or host-policy changes and no privileged/Codex-bypass mode. |
 | AC14 | One consolidated semantic review confirms unchanged state authority, native worker interface, scheduling preference/fallback and publication boundaries; no new trigger or scheduler is installed. |
-| AC15, AC16 | Separate proof reports, synchronized resources, 1,825 passing tests, lint/format/type/skill checks, build and isolated fresh-consumer checks. Windows-host mount behavior is explicitly unverified. |
+| AC15, AC16 | Separate proof reports, synchronized resources, 1,871 passing tests plus 84 affected tests after the final fixture-path adjustment, lint/format/type/skill checks, build and isolated fresh-consumer checks. Windows-host mounts and dedicated Claude/Copilot read-only/credential-write isolation remain explicitly unverified. |
 
 ## Current checkpoint
 
-- Same branch/worktree retained: `nik/local-compounding-hooks`; prior feature
-  preserved in `f0186a1`. Runtime/skill slices are `e8859ce`, `67af72a`, `ddf33fe`;
-  consolidated-review safeguards are `62ef1ed`; acceptance/failure evidence is
-  `27cd6e9`. The final documentation commit follows those slices.
-- C1-C4 implementation and C5 evidence/reporting are complete, with the live
-  limits above. One consolidated round of four independent read-only reviewers
-  is complete; seven defects are fixed. No second review round was run. The
-  remaining native sandbox proof was subsequently supplied through the authorized
-  Docker retest; hook delivery and unavailable environment/provider proof remain
-  explicit. These were affected verification runs, not another review round.
-- Final suite: 1,825 tests passed in 64.30 seconds in
-  `.cache/container-launch-proof/pytest-seccomp-final-trust.txt`. Lint, formatting,
-  mypy, packaging, skill validation and full isolated fresh-consumer checks pass.
-  Unchanged build/consumer proof is reused; later changes affect only the
-  acceptance driver, its regressions and documentation.
-- Current-wheel Debian and Alpine immutable-runtime/filesystem/recreation proof
-  passed in `.cache/container-runtime-final/report.json`. Direct container-local
-  writable provisioning and Windows-host mount behavior remain unverified.
-- Native preparation exposed a pinned APM binary ABI limitation, Docker storage
-  exhaustion and a phase-dependent APM audit expectation. Evidence and targeted
-  fixture repairs are recorded; no consumer gate was weakened or bypassed.
-- Latest native result: `.cache/container-launch/seccomp-verified/report.json`.
-  The owner authorized local Docker reconfiguration after the initial namespace
-  failure. A per-container default-deny syscall profile enables nested user/mount
-  namespaces with all capabilities dropped and no-new-privileges. No daemon,
-  host-kernel or real consumer policy is changed. The test container is stopped.
-- Codex actual native tools pass retrieval, receipts, write doctor, mapped fixture
-  credentials, signal capture/guarded drain and source-write denial in fresh,
-  reused and recreated phases. Native sandbox-helper checks additionally prove
-  private-file write denial and explicit read-only roots. Populated state and
-  repeat binding survive recreation. Native hook delivery remains unverified.
-- Fixture corrections initialize central storage as Git, preserve runtime PATH
-  with a non-login tool shell and use Codex's top-level fixture-project trust
-  map. The driver accepts an explicit test-only Docker seccomp policy; it does
-  not reconfigure user Docker or automatically broaden harness permissions.
-- Claude/Copilot live authentication is unavailable. Native scheduling remains
-  paused. No consumer installation, actual profile credential/automation changes,
-  push or remote publication. Reflection preserves evidence-backed limitations
-  without duplicating existing container setup observations.
-- Handoff: implementation can be reviewed at this branch. Remaining acceptance
-  requires observed native hook delivery, designated Claude/Copilot authentication
-  and the unexercised platform/provisioning routes; rerun only affected checks.
-  Do not reset user state, alter live sessions or start another review round.
+- Same worktree and branch retained: `nik/local-compounding-hooks`, based on
+  `ca56345` and the prior feature/implementation/review commits above. The new
+  follow-up changes setup guidance and test evidence; the installed runtime and
+  hook implementation required no fix.
+- Native hooks now pass in Codex 0.160.1, Claude Code 2.1.236 and Copilot CLI
+  1.0.86. Codex needed native review of the two exact package hook definitions
+  beyond project trust. Other hooks stayed untrusted; no bypass or fabricated
+  provider state was used. The recurring trust issue is recorded in the selected
+  workspace signal inbox with this conversation's exact session provenance.
+- Codex app-server event/rollout proof is in
+  `.cache/container-launch/hook-trust-proof/verified-hook-delivery.json`.
+  Claude and Copilot fresh/reused actual-tool results, native transcripts and
+  selected hook records are beside it. Both providers used owner-completed
+  native container login; host Keychain data was neither extracted nor copied.
+- All three providers verify retrieval, receipt/signal writes, mapped synthetic
+  credentials and guarded fixture cleanup. Codex additionally has private-file
+  write denial and explicit read-only native sandbox-helper proof. Claude/Copilot
+  results retain `partial` for those dedicated isolation checks, not for hooks.
+- Copilot verification now reads its exact bounded native transcript because
+  public stdout omits startup hook events. Correlation checks reject wrong
+  sessions/invocations and unsuccessful or uncorrelated outputs; exported evidence
+  excludes credential/config files and opaque model fields. Test permissions
+  account for the observed venv interpreter symlink to `/usr/bin/python3.13`.
+- Direct Linux writable-runtime install, reuse and exact-wheel verification pass
+  in `.cache/container-launch/writable-runtime-proof/summary.json`; previous
+  Debian/Alpine immutable-runtime and storage/recreation evidence remains valid.
+- Final gates: 1,871 tests in 68.06s, then 84 affected driver tests after the final
+  permission-path adjustment; Ruff, formatting, mypy, skill validation, package
+  build and isolated fresh-consumer checks pass. Evidence paths are listed in
+  `docs/container-launch-proof.md`. Final binding stays idempotent and populated
+  state is preserved.
+- One consolidated review round remains complete; subsequent work is affected
+  diagnosis/verification, not another review. Existing real consumers, profiles,
+  credentials and automation registrations were not changed. No push/PR/merge.
+  The disposable test container is stopped with its volume and evidence retained.
+- Remaining proof: actual Windows-host mounts; dedicated private-file write
+  denial and explicit read-only launches for Claude/Copilot. Provider operation
+  on Alpine is not claimed from Python tests. Native scheduling remains paused.
+  Any follow-up should reuse this candidate and proof, preserve user work and
+  avoid another review round or routine consumer installation.
