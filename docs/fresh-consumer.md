@@ -161,6 +161,12 @@ equivalents with ordinary file tools, then record at most one concise signal
 for the same observation. A harness-origin signal without that exact session
 ID is rejected; manual signals may omit harness provenance.
 
+Stored provenance remains valid when the selected scopes, sources or catalog
+later change. If listing reports unresolved files, follow all continuations and
+inspect those files alongside valid candidates using the installed guide. Keep
+their originals; a metadata error is not a no-update decision or permission to
+discard the observation.
+
 ## Integrate with an existing repository
 
 Invoke `knowledge-setup` and let it inspect the consumer's instructions,

@@ -139,6 +139,11 @@ owns the acceptance and change-invalidation procedure.
 - Repeated `signal record` calls create distinct files. The reminder tells the
   agent to inspect same-session candidates before recording; the CLI does not
   silently deduplicate observations.
+- Historical signal provenance survives later scope, source and catalog changes.
+  Malformed stored metadata remains visible as unresolved listing evidence;
+  agents correlate bodies, retrieval receipts and repository context without
+  rewriting provenance or manually discarding inputs. Partial listings require
+  following continuations even when a page has no valid results.
 - One local harness session activates at most one credential profile. Changing
   `--profile` changes knowledge selection only; credential changes require setup
   for the target profile and a new session.

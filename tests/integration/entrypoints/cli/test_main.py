@@ -503,6 +503,51 @@ def test_cli_signal_capture_then_list_preserves_claim_and_exposes_read_locations
     assert "Preserve this exact claim" not in json.dumps(listed)
 
 
+def test_cli_partial_signal_pages_retain_valid_results_and_explicit_exit_category(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    config, authored = signal_workspace(tmp_path)
+    bucket = tmp_path / "scaffold/ai/signals/projects/products/orders"
+    bucket.mkdir(parents=True)
+    invalid = bucket / "00-invalid.md"
+    invalid.write_bytes(b"Retain raw evidence for agent evaluation.\n")
+    valid = bucket / "01-valid.md"
+    valid.write_bytes(authored.read_bytes())
+    original = {path: path.read_bytes() for path in (invalid, valid)}
+    request = tmp_path / "request.json"
+
+    def invoke(value: object) -> dict[str, object]:
+        request.write_text(json.dumps(value))
+        assert (
+            main(["--config", str(config), "signal", "list", "--request-file", str(request)]) == 2
+        )
+        return output(capsys)
+
+    first = invoke({"limit": 1})
+    assert first["status"] == "error"
+    assert first["scan_status"] == "partial"
+    assert first["diagnostics"][0]["code"] == "unresolved-signals"
+    assert first["results"] == []
+    assert first["returned"] == 0
+    assert first["total_matches"] == 1
+    assert first["unresolved_count"] == 1
+    assert first["unresolved"][0]["local_path"] == str(invalid)
+    assert first["truncated"] is True
+    assert first["continuation"]
+    second = invoke({"limit": 1, "continuation": first["continuation"]})
+    assert second["status"] == "error"
+    assert second["scan_status"] == "partial"
+    assert second["returned"] == 1
+    assert second["results"][0]["local_path"] == str(valid)
+    assert second["unresolved"] == []
+    assert second["unresolved_count"] == 1
+    assert second["continuation"] is None
+    assert first["fingerprint"] == second["fingerprint"]
+    assert {path: path.read_bytes() for path in original} == original
+
+
 def test_cli_compound_drain_retains_foreign_signal_and_runtime_file(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],

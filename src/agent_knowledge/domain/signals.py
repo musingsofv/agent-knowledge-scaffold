@@ -95,6 +95,25 @@ def validate_signal_origin(
     project_path: str | None,
 ) -> None:
     """Require captured provenance to match loaded context without inferring membership."""
+    validate_stored_signal_origin(origin, workspace_id=workspace_id, project_path=project_path)
+    if set(origin.applicable_scopes) != set(applicable_scopes):
+        raise ValidationError(
+            "origin-mismatch",
+            "origin.applicable_scopes",
+            "The signal scope set must equal the configured workspace scope set.",
+        )
+    if set(origin.source_ids) != set(source_ids):
+        raise ValidationError(
+            "origin-mismatch",
+            "origin.source_ids",
+            "The signal source ID set must equal the configured workspace source ID set.",
+        )
+
+
+def validate_stored_signal_origin(
+    origin: SignalOrigin, *, workspace_id: str, project_path: str | None
+) -> None:
+    """Keep historical workspace and bucket ownership exact without changing provenance."""
     if origin.workspace_id != workspace_id:
         raise ValidationError(
             "origin-mismatch",
@@ -107,16 +126,4 @@ def validate_signal_origin(
             "origin.project_path",
             "The signal project path must equal the selected project path; "
             "shared capture requires an explicit null project path.",
-        )
-    if set(origin.applicable_scopes) != set(applicable_scopes):
-        raise ValidationError(
-            "origin-mismatch",
-            "origin.applicable_scopes",
-            "The signal scope set must equal the configured workspace scope set.",
-        )
-    if set(origin.source_ids) != set(source_ids):
-        raise ValidationError(
-            "origin-mismatch",
-            "origin.source_ids",
-            "The signal source ID set must equal the configured workspace source ID set.",
         )

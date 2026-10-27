@@ -185,8 +185,12 @@ def test_listing_preserves_invalid_selected_signal_and_reports_error(tmp_path: P
     captured = record_signal_result(load_workspace(config), {"file": str(authored)})
     target = Path(captured["local_path"])
     target.write_text("invalid frontmatter")
-    with pytest.raises(ValidationError):
-        list_signal_result(load_workspace(config), {})
+    result = list_signal_result(load_workspace(config), {})
+    assert result["scan_status"] == "partial"
+    assert result["results"] == []
+    assert result["unresolved_count"] == 1
+    assert result["unresolved"][0]["local_path"] == str(target)
+    assert result["unresolved"][0]["diagnostics"][0]["code"] == "invalid-frontmatter"
     assert target.read_text() == "invalid frontmatter"
 
 
@@ -213,12 +217,13 @@ def test_invalid_signal_metadata_diagnostic_names_file_and_field(tmp_path: Path)
     record = record_signal_result(load_workspace(config), {"file": str(authored)})
     target = Path(record["local_path"])
     parsed = parse_document(target.read_bytes())
-    parsed.metadata["technologies"] = ["unknown-engine"]
+    parsed.metadata["technologies"] = ["Invalid Engine"]
     target.write_bytes(dump_document(parsed.metadata, parsed.body))
-    with pytest.raises(ValidationError) as error:
-        list_signal_result(load_workspace(config), {})
-    assert str(target) in error.value.path
-    assert "technologies[0]" in error.value.path
+    result = list_signal_result(load_workspace(config), {})
+    diagnostic = result["unresolved"][0]["diagnostics"][0]
+    assert diagnostic["code"] == "invalid-identifier"
+    assert str(target) in diagnostic["path"]
+    assert "technologies[0]" in diagnostic["path"]
     assert target.exists()
 
 

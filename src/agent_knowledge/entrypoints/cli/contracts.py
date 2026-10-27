@@ -328,10 +328,19 @@ def _schemas() -> dict[str, dict[str, FieldSpec]]:
             "session_id": _field(
                 "string",
                 "Optional exact opaque provider session handle; matching is literal "
-                "and case-sensitive.",
+                "and case-sensitive. Unresolved records remain visible when their session "
+                "cannot be validated.",
             ),
-            "limit": limit,
-            "continuation": continuation,
+            "limit": _field(
+                "integer",
+                "Default 10, maximum 100. Bound the combined page of valid results and "
+                "unresolved previews; returned counts valid results only.",
+            ),
+            "continuation": _field(
+                "string",
+                "Opaque snapshot-bound cursor for the combined page; follow it even when "
+                "results is empty. Unresolved content keeps scan_status partial and exit 2.",
+            ),
         },
         "catalog": {
             "dimension": _field(
@@ -431,7 +440,10 @@ def describe(value: object) -> Description:
             ),
             "validate": "Validate selected sources, documents or signal files before publication.",
             "signal record": "Validate Markdown and durable origin; capture without overwrite.",
-            "signal list": "List originating workspace signals with metadata and body locations.",
+            "signal list": (
+                "List historical signal previews and bounded unresolved records without bodies; "
+                "partial scans retain valid results and exit 2."
+            ),
             "compound": (
                 "Archive selected inputs, record a run and safely drain unchanged handled signals."
             ),

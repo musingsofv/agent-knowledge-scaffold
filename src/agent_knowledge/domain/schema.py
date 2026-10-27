@@ -235,8 +235,44 @@ def parse_validate_query(value: object, catalog: Catalog) -> ValidateQuery:
     )
 
 
-def _origin(value: object, catalog: Catalog) -> SignalOrigin:
-    """Validate captured origin without asserting a live checkout identity."""
+def _signal_catalog_identifier(value: object, path: str) -> str:
+    """Require catalog-style syntax independently of whether the ID is still registered."""
+    identifier = read_identifier(value, path)
+    if identifier == "any" or identifier.startswith("family:"):
+        raise ValidationError(
+            "reserved-identifier", path, "Reserved applicability syntax cannot identify a record."
+        )
+    return identifier
+
+
+def _signal_identifiers(value: object, path: str) -> tuple[str, ...]:
+    """Retain historical catalog IDs while rejecting malformed or reserved syntax."""
+    return tuple(
+        _signal_catalog_identifier(identifier, f"{path}[{index}]")
+        for index, identifier in enumerate(read_strings(value, path))
+    )
+
+
+def _signal_technologies(value: object) -> tuple[str, ...]:
+    """Keep advisory technology alternatives without resolving today's catalog."""
+    values = read_strings(value, "technologies")
+    if "any" in values and len(values) != 1:
+        raise ValidationError(
+            "invalid-value", "technologies", "On a document, any must stand alone."
+        )
+    for index, identifier in enumerate(values):
+        path = f"technologies[{index}]"
+        if identifier == "any":
+            continue
+        if identifier.startswith("family:"):
+            _signal_catalog_identifier(identifier[7:], path)
+        else:
+            _signal_catalog_identifier(identifier, path)
+    return values
+
+
+def _stored_origin(value: object) -> SignalOrigin:
+    """Validate captured provenance independently of later configuration changes."""
     fields = read_mapping(
         value,
         "origin",
@@ -253,8 +289,8 @@ def _origin(value: object, catalog: Catalog) -> SignalOrigin:
         project_path=project_path,
         applicable_scopes=()
         if fields["applicable_scopes"] == []
-        else _facet(fields["applicable_scopes"], "scope", catalog, path="origin.applicable_scopes"),
-        source_ids=_source_ids(fields["source_ids"], catalog, "origin.source_ids"),
+        else _signal_identifiers(fields["applicable_scopes"], "origin.applicable_scopes"),
+        source_ids=_signal_identifiers(fields["source_ids"], "origin.source_ids"),
         harness=(
             read_identifier(fields["harness"], "origin.harness") if "harness" in fields else None
         ),
@@ -332,8 +368,13 @@ def _evidence(value: object) -> tuple[EvidenceReference, ...]:
     return tuple(references)
 
 
-def parse_signal(value: object, body: object, catalog: Catalog) -> KnowledgeSignal:
-    """Validate signal metadata and retain the exact supplied Markdown claim body."""
+def parse_stored_signal(value: object, body: object) -> KnowledgeSignal:
+    """Read immutable historical metadata without reinterpreting its catalog IDs.
+
+    This validates the complete signal schema and identifier syntax. Capture and
+    authoring must additionally resolve identifiers with ``parse_signal`` and
+    compare the origin with the current workspace context.
+    """
     fields = _versioned_fields(
         value,
         "knowledge-signal.v1",
@@ -344,7 +385,7 @@ def parse_signal(value: object, body: object, catalog: Catalog) -> KnowledgeSign
         raise ValidationError("invalid-type", "body", "Expected a Markdown claim body.")
     if not body.strip():
         raise ValidationError("invalid-value", "body", "A signal must contain a nonempty claim.")
-    origin = _origin(fields["origin"], catalog)
+    origin = _stored_origin(fields["origin"])
     if origin.harness is not None and origin.session_id is None:
         raise ValidationError(
             "missing-field",
@@ -358,6 +399,28 @@ def parse_signal(value: object, body: object, catalog: Catalog) -> KnowledgeSign
         origin=origin,
         evidence=_evidence(fields["evidence"]),
         body=body,
-        entities=_optional_facet(fields, "entities", catalog),
-        technologies=_optional_facet(fields, "technologies", catalog),
+        entities=_signal_identifiers(fields["entities"], "entities")
+        if "entities" in fields
+        else None,
+        technologies=_signal_technologies(fields["technologies"])
+        if "technologies" in fields
+        else None,
     )
+
+
+def parse_signal(value: object, body: object, catalog: Catalog) -> KnowledgeSignal:
+    """Validate newly authored signal identifiers against the current catalog."""
+    signal = parse_stored_signal(value, body)
+    if signal.origin.applicable_scopes:
+        _facet(
+            list(signal.origin.applicable_scopes),
+            "scope",
+            catalog,
+            path="origin.applicable_scopes",
+        )
+    _source_ids(list(signal.origin.source_ids), catalog, "origin.source_ids")
+    if signal.entities is not None:
+        _facet(list(signal.entities), "entities", catalog)
+    if signal.technologies is not None:
+        _facet(list(signal.technologies), "technologies", catalog)
+    return signal
