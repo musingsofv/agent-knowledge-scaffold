@@ -590,6 +590,34 @@ evidence. It must not promote a repository-origin observation to an
 organization or technology-family rule merely because the producer belongs to
 that scope or technology family.
 
+New signal capture validates against the selected configuration and catalog.
+Stored signals preserve the configuration observed at capture: adding, removing
+or renaming scopes, sources or advisory catalog entries does not invalidate that
+history. Listing and compounding validate the stored schema and exact workspace,
+project and storage-bucket identity without requiring historical scope/source
+lists to equal today's selection. Do not rewrite old provenance to fit the
+current configuration. Current configuration still owns routing and publication.
+
+When a safely readable stored file has malformed metadata, `signal list` retains
+valid previews and returns a separate `unresolved` preview with its path, byte
+count, fingerprint and diagnostics. It does not invent an ID, origin or body
+preview. `scan_status: partial`, a nonzero `unresolved_count` and exit 2 make the
+incomplete inventory explicit. Valid and unresolved entries share one ordered,
+bounded pagination stream: follow every continuation, including a page with no
+valid `results`. `total_matches` and `returned` count valid matches; the
+scan-wide `unresolved_count` and each page's `unresolved` list account for the
+remaining candidates. A session filter cannot hide a candidate whose session is
+unknown. Unsafe filesystem access can still stop the scan.
+
+Inspect unresolved files with ordinary file tools and correlate their bodies
+with retrieval receipts, available originating context and existing knowledge.
+A metadata diagnostic alone is never evidence that an observation has no value
+or should be skipped. Preserve the original file and provenance; record the
+supported authoring outcome and any concrete unresolved identity prerequisite.
+Unresolved originals cannot enter automatic archive/drain until their identity
+and supported lifecycle handling are established. Never delete them manually,
+fabricate identity or silently normalize metadata to make drainage pass.
+
 ## Reflect and record useful observations
 
 At a natural stopping point, review work already performed using this procedure:

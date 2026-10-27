@@ -155,7 +155,8 @@ def _run(command: str, workspace: Workspace, request: object) -> tuple[dict[str,
         case "signal record":
             return dict(record_signal_result(workspace, request)), 0
         case "signal list":
-            return dict(list_signal_result(workspace, request)), 0
+            listing = list_signal_result(workspace, request)
+            return dict(listing), 2 if listing["unresolved_count"] else 0
         case _:
             raise ValidationError("invalid-arguments", "command", "Command is not available.")
 

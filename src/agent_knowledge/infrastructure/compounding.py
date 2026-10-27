@@ -31,8 +31,8 @@ from agent_knowledge.domain.configuration import (
     compound_trigger_view,
     parse_compound_trigger,
 )
-from agent_knowledge.domain.schema import parse_signal
-from agent_knowledge.domain.signals import validate_signal_origin
+from agent_knowledge.domain.schema import parse_stored_signal
+from agent_knowledge.domain.signals import validate_stored_signal_origin
 from agent_knowledge.domain.usage import read_utc_timestamp
 from agent_knowledge.domain.validation import ValidationError
 
@@ -1391,23 +1391,21 @@ def _validate_drain_target(
     snapshot: SignalSnapshot,
     data: bytes,
 ) -> None:
-    """Require one current-workspace signal before considering its removal."""
+    """Require a historical signal in the exact workspace/bucket before removal."""
     expected_project = _bucket_project(storage, project, path)
     if path.suffix != ".md":
         raise ValidationError(
             "invalid-signal-extension", "signals.path", "Signals must use a Markdown .md file."
         )
     parsed = parse_document(data, path=str(path))
-    signal = parse_signal(parsed.metadata, parsed.body, workspace.catalog)
+    signal = parse_stored_signal(parsed.metadata, parsed.body)
     if signal.id != snapshot.id:
         raise ValidationError(
             "signal-id-mismatch", "signals.id", "Snapshot ID must equal the stored signal ID."
         )
-    validate_signal_origin(
+    validate_stored_signal_origin(
         signal.origin,
         workspace_id=workspace.definition.workspace_id,
-        applicable_scopes=workspace.definition.applicable_scopes,
-        source_ids=tuple(source.id for source in workspace.sources),
         project_path=expected_project,
     )
 

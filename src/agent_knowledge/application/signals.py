@@ -15,12 +15,13 @@ from agent_knowledge.application.pagination import (
     request_fingerprint,
 )
 from agent_knowledge.domain.models import KnowledgeSignal
-from agent_knowledge.domain.schema import parse_signal
+from agent_knowledge.domain.schema import parse_signal, parse_stored_signal
 from agent_knowledge.domain.signals import (
     parse_signal_list_query,
     parse_signal_record_query,
     signal_workspace_id,
     validate_signal_origin,
+    validate_stored_signal_origin,
 )
 from agent_knowledge.domain.validation import ValidationError
 from agent_knowledge.infrastructure.configuration import (
@@ -76,8 +77,25 @@ class SignalPreview(TypedDict):
     fingerprint: str
 
 
+class SignalDiagnostic(TypedDict):
+    """Bound a stored-record error without returning its body or inventing provenance."""
+
+    code: str
+    path: str
+    message: str
+
+
+class UnresolvedSignalPreview(TypedDict):
+    """Locate exact unresolvable bytes for explicit agent inspection and evaluation."""
+
+    local_path: str
+    byte_count: int
+    fingerprint: str
+    diagnostics: list[SignalDiagnostic]
+
+
 class SignalListResult(TypedDict):
-    """Page selected-workspace signals and expose foreign-workspace omissions."""
+    """Page valid and unresolved inputs together without claiming a complete scan."""
 
     results: list[SignalPreview]
     total_matches: int
@@ -86,6 +104,21 @@ class SignalListResult(TypedDict):
     continuation: str | None
     fingerprint: str
     other_workspaces: int
+    unresolved: list[UnresolvedSignalPreview]
+    unresolved_count: int
+    scan_status: str
+    diagnostics: list[SignalDiagnostic]
+
+
+def _unresolved_preview(path: Path, data: bytes, error: ValidationError) -> UnresolvedSignalPreview:
+    return UnresolvedSignalPreview(
+        local_path=str(path),
+        byte_count=len(data),
+        fingerprint="sha256:" + hashlib.sha256(data).hexdigest(),
+        diagnostics=[
+            SignalDiagnostic(code=error.code, path=error.path[:512], message=error.message[:512])
+        ],
+    )
 
 
 def _preview(path: Path, parsed: ParsedDocument, signal: KnowledgeSignal) -> SignalPreview:
@@ -185,7 +218,7 @@ def record_signal_result(workspace: Workspace, value: object) -> SignalPreview:
 
 
 def list_signal_result(workspace: Workspace, value: object) -> SignalListResult:
-    """Validate selected-context signals without creating an inbox or returning claims."""
+    """Inventory historical signals, keeping invalid records visible and unchanged."""
     query = parse_signal_list_query(value, workspace.catalog)
     storage = validate_signal_storage(workspace)
     if storage is None:
@@ -201,23 +234,34 @@ def list_signal_result(workspace: Workspace, value: object) -> SignalListResult:
         )
     before = inventory_signals(workspace, project, include_shared=query.include_shared)
     digest = hashlib.sha256((workspace.fingerprint + before.fingerprint).encode())
-    rows: list[SignalPreview] = []
+    rows: list[tuple[SignalPreview | None, UnresolvedSignalPreview | None]] = []
+    total_matches = 0
+    unresolved_count = 0
     other_workspaces = 0
     for signal_path in before.files:
-        parsed = parse_document(
-            read_bytes(signal_path, max_bytes=DEFAULT_DOCUMENT_BYTES), path=str(signal_path)
-        )
-        digest.update(parsed.fingerprint.encode())
-        with _signal_errors(signal_path):
-            if signal_workspace_id(parsed.metadata) != workspace.definition.workspace_id:
-                other_workspaces += 1
-                continue
-            signal = parse_signal(parsed.metadata, parsed.body, workspace.catalog)
-            expected = None if signal_path.parent == storage.signal_root / "shared" else project
-            _validate_origin(signal, workspace, expected)
-            if query.session_id is not None and signal.origin.session_id != query.session_id:
-                continue
-        rows.append(_preview(signal_path, parsed, signal))
+        data = read_bytes(signal_path, max_bytes=DEFAULT_DOCUMENT_BYTES)
+        digest.update(hashlib.sha256(data).digest())
+        try:
+            parsed = parse_document(data, path=str(signal_path))
+            with _signal_errors(signal_path):
+                if signal_workspace_id(parsed.metadata) != workspace.definition.workspace_id:
+                    other_workspaces += 1
+                    continue
+                signal = parse_stored_signal(parsed.metadata, parsed.body)
+                expected = None if signal_path.parent == storage.signal_root / "shared" else project
+                validate_stored_signal_origin(
+                    signal.origin,
+                    workspace_id=workspace.definition.workspace_id,
+                    project_path=expected,
+                )
+                if query.session_id is not None and signal.origin.session_id != query.session_id:
+                    continue
+        except ValidationError as error:
+            rows.append((None, _unresolved_preview(signal_path, data, error)))
+            unresolved_count += 1
+        else:
+            rows.append((_preview(signal_path, parsed, signal), None))
+            total_matches += 1
     _check_context(workspace)
     if inventory_signals(workspace, project, include_shared=query.include_shared) != before:
         raise AdapterError(
@@ -234,14 +278,30 @@ def list_signal_result(workspace: Workspace, value: object) -> SignalListResult:
     page = rows[cursor.offset : cursor.offset + query.limit]
     end = cursor.offset + len(page)
     more = end < len(rows)
+    results = [preview for preview, _ in page if preview is not None]
+    unresolved = [preview for _, preview in page if preview is not None]
     return SignalListResult(
-        results=page,
-        total_matches=len(rows),
-        returned=len(page),
+        results=results,
+        total_matches=total_matches,
+        returned=len(results),
         truncated=more,
         continuation=encode_cursor("signal list", query_hash, snapshot, Cursor(end))
         if more
         else None,
         fingerprint=snapshot,
         other_workspaces=other_workspaces,
+        unresolved=unresolved,
+        unresolved_count=unresolved_count,
+        scan_status="partial" if unresolved_count else "complete",
+        diagnostics=[
+            SignalDiagnostic(
+                code="unresolved-signals",
+                path=str(storage.signal_root),
+                message="Some records could not be validated. Preserve original bytes and "
+                "provenance; inspect raw signal, receipt and context evidence. Follow continuation "
+                "even when results is empty.",
+            )
+        ]
+        if unresolved_count
+        else [],
     )
